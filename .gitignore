@@ -1,0 +1,10 @@
+target/
+data/
+.idea/
+*.iml
+.DS_Store
+public-url.txt
+*.log
+*.class
+tools/cloudflared.exe
+tools/javac-classpath.arg

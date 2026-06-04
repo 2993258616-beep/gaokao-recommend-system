@@ -1,0 +1,148 @@
+let subjectType = '历史';
+const MAX_VISIBLE_ROWS = 3;
+const $ = id => document.getElementById(id);
+setupSessionGuard();
+
+document.querySelectorAll('.subject').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.subject').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        subjectType = btn.dataset.value;
+        renderRecommend();
+    });
+});
+
+$('recommendBtn').addEventListener('click', renderRecommend);
+
+function renderRecommend() {
+    const score = $('score').value || 500;
+    const schoolProvince = $('schoolProvince').value;
+    $('tagSubject').innerText = subjectType + '类';
+    $('tagProvince').innerText = schoolProvince;
+    $('summaryText').innerText = `按历史录取数据参考：河南${subjectType}类，预估 ${score} 分，筛选条件为学校地区：${schoolProvince}。`;
+
+    fetch(`/api/recommend?score=${encodeURIComponent(score)}&subjectType=${encodeURIComponent(subjectType)}&schoolProvince=${encodeURIComponent(schoolProvince)}`, {
+        credentials: 'same-origin',
+        cache: 'no-store'
+    })
+        .then(resp => {
+            if (resp.status === 401 || resp.status === 403) {
+                window.location.href = '/login?expired=1';
+                throw new Error('登录已失效');
+            }
+            if (!resp.ok) throw new Error('请求失败');
+            return resp.json();
+        })
+        .then(data => {
+            const scoreValue = Number(score) || 500;
+            const rows = normalizeRecommendRows(data, scoreValue);
+            const html = section('rush', '冲', '冲刺推荐', '适合略高于当前分数的院校', rows.rush)
+                + section('stable', '稳', '稳妥推荐', '适合重点考虑的匹配院校', rows.stable)
+                + section('safe', '保', '保底推荐', '适合保底填报的院校', rows.safe);
+            $('resultArea').innerHTML = html;
+        })
+        .catch(err => {
+            $('resultArea').innerHTML = `<div class="empty">加载失败：${escapeHtml(err.message)}</div>`;
+        });
+}
+
+function section(type, word, title, desc, rows) {
+    let body = '';
+    if (!rows.length) {
+        body = '<div class="empty">当前筛选条件下暂无数据，可以切换学校地区。</div>';
+    } else {
+        body = `<table class="recommend-table"><thead><tr><th>院校/专业组</th><th>专业</th><th>学校地区</th></tr></thead><tbody>`
+            + rows.map(r => `<tr>
+                <td><div class="school-name">${escapeHtml(r.schoolName)} ${escapeHtml(r.majorGroup || '')}组</div><div class="sub-info">${escapeHtml(r.schoolType || '')} · ${escapeHtml(r.schoolLevel || '')} · 河南考生</div></td>
+                <td class="major-cell">${renderMajorList(r.majorDirection || r.majorCategory || '')}</td>
+                <td>${escapeHtml(r.schoolProvince || '')}</td>
+            </tr>`).join('') + '</tbody></table>';
+    }
+    return `<div class="block ${type}"><div class="block-side"><div class="round">${word}</div><h2>${title}</h2><p>${desc}</p></div><div class="table-wrap">${body}</div></div>`;
+}
+
+function normalizeRecommendRows(data, score) {
+    return {
+        rush: filterByScoreLevel(data.rush || [], score).slice(0, MAX_VISIBLE_ROWS),
+        stable: filterByScoreLevel(data.stable || [], score).slice(0, MAX_VISIBLE_ROWS),
+        safe: filterByScoreLevel(data.safe || [], score).slice(0, MAX_VISIBLE_ROWS)
+    };
+}
+
+function filterByScoreLevel(rows, score) {
+    if (score < 600) return rows;
+    return rows.filter(row => !isJuniorCollege(row));
+}
+
+function isJuniorCollege(row) {
+    const text = [
+        row.schoolType,
+        row.schoolLevel,
+        row.majorGroupFull,
+        row.schoolName
+    ].filter(Boolean).join(' ');
+    return /专科|高职|高等专科学校/.test(text);
+}
+
+function renderMajorList(value) {
+    const text = String(value == null ? '' : value).trim();
+    if (!text) return '';
+    const parts = text.split(/[、,，;；]/).map(v => v.trim()).filter(Boolean);
+    if (parts.length <= 1) {
+        return `<span class="major-text">${escapeHtml(text)}</span>`;
+    }
+    const visibleParts = parts.slice(0, 3);
+    const suffix = parts.length > 3 ? '<span class="major-chip more">等</span>' : '';
+    return `<div class="major-list">${visibleParts.map(v => `<span class="major-chip">${escapeHtml(v)}</span>`).join('')}${suffix}</div>`;
+}
+
+function escapeHtml(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function setupSessionGuard() {
+    let manualLogout = false;
+    let closeSent = false;
+    const logoutForm = document.querySelector('.logout-form');
+    if (logoutForm) {
+        logoutForm.addEventListener('submit', () => {
+            manualLogout = true;
+        });
+    }
+
+    const ping = () => {
+        fetch('/api/session/ping', {
+            method: 'GET',
+            credentials: 'same-origin',
+            cache: 'no-store'
+        }).catch(() => {});
+    };
+    window.setInterval(ping, 30000);
+
+    const closeSession = () => {
+        if (manualLogout || closeSent) return;
+        closeSent = true;
+        try {
+            if (navigator.sendBeacon) {
+                navigator.sendBeacon('/api/session/close', new Blob(['close'], {type: 'text/plain'}));
+                return;
+            }
+        } catch (ignored) {}
+        try {
+            fetch('/api/session/close', {
+                method: 'POST',
+                credentials: 'same-origin',
+                keepalive: true,
+                cache: 'no-store'
+            }).catch(() => {});
+        } catch (ignored) {}
+    };
+
+    window.addEventListener('pagehide', closeSession);
+    window.addEventListener('beforeunload', closeSession);
+}
+
+renderRecommend();

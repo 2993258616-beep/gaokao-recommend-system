@@ -1,0 +1,61 @@
+{
+  "total_rows": 8886,
+  "source_counts": {
+    "物理": 5624,
+    "历史": 3262
+  },
+  "prediction_importable_rows": 8852,
+  "missing_score_rows": 34,
+  "unknown_school_province_rows": 1162,
+  "top_school_provinces": [
+    [
+      "未识别",
+      1162
+    ],
+    [
+      "河南",
+      940
+    ],
+    [
+      "山东",
+      444
+    ],
+    [
+      "辽宁",
+      378
+    ],
+    [
+      "江苏",
+      372
+    ],
+    [
+      "广东",
+      347
+    ],
+    [
+      "四川",
+      343
+    ],
+    [
+      "湖北",
+      338
+    ],
+    [
+      "浙江",
+      321
+    ],
+    [
+      "陕西",
+      317
+    ],
+    [
+      "河北",
+      294
+    ],
+    [
+      "吉林",
+      280
+    ]
+  ],
+  "tsv": "C:\\Users\\JD\\Desktop\\gaokao-recommend-system\\gaokao-recommend-system\\tools\\admission_groups_import.tsv"
+}

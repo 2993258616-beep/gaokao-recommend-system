@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="_csrf" th:content="${_csrf.token}">
+    <meta name="_csrf_header" th:content="${_csrf.headerName}">
+    <title>河南高考志愿推荐系统</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<header class="hero">
+    <div class="top-actions">
+        <form th:action="@{/logout}" method="post" class="logout-form">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+            <button type="submit">安全退出</button>
+        </form>
+    </div>
+    <h1>河南高考志愿推荐系统</h1>
+    <p>2026 预测版</p>
+</header>
+
+<main class="container">
+    <section class="search-panel">
+        <div class="field">
+            <label>预估分数</label>
+            <div class="score-input"><input id="score" type="number" value="500" min="100" max="750"><span>分</span></div>
+        </div>
+        <div class="field">
+            <label>科类选择</label>
+            <div class="subject-tabs">
+                <button class="subject active" data-value="历史" type="button">历史类</button>
+                <button class="subject" data-value="物理" type="button">物理类</button>
+            </div>
+        </div>
+        <div class="field">
+            <label>学校地区</label>
+            <select id="schoolProvince">
+                <option value="全部地区">全部地区</option>
+                <option th:each="p : ${schoolProvinces}" th:value="${p}" th:text="${p}"></option>
+            </select>
+        </div>
+        <button id="recommendBtn" class="primary-btn" type="button">开始推荐</button>
+    </section>
+
+    <section class="summary-tags">
+        <span>科类：<b id="tagSubject">历史类</b></span>
+        <span>学校地区：<b id="tagProvince">全部地区</b></span>
+    </section>
+
+    <p class="summary-text" id="summaryText">2026 预测：河南历史类，预估 500 分，当前筛选条件为学校地区：全部地区。</p>
+
+    <section id="resultArea"></section>
+</main>
+
+<footer class="source-footer">
+    <span>河南省教育考试院</span>
+</footer>
+
+<script th:src="@{/js/app.js}"></script>
+</body>
+</html>
