@@ -18,7 +18,8 @@
   },
   {
     "username": "wst123",
-    "bcryptHash": "$2a$10$1qbpI/biBfQOADmAPTp/FOJ1l3tZaRPxvUPHv0vDfWFUVvWiHoOca"
+    "passwordHash": "ed6e997596fea8f469cdbcdad8c63926c7398c4e56e97b3f343dd9a211a86fe6",
+    "bcryptHash": "$2a$10$84N1PFUho/HTeKDHPc0q5eYM5v1I7jHp4q.DkbRhL39dfxq4q0Ggy"
   },
   {
     "username": "lsb123",
