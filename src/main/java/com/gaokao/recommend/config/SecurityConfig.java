@@ -50,7 +50,7 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 .ignoringAntMatchers("/api/**")
             .and()
             .authorizeRequests()
-                .antMatchers("/login", "/css/**", "/js/**", "/images/**").permitAll()
+                .antMatchers("/login", "/terms", "/css/**", "/js/**", "/images/**").permitAll()
                 .antMatchers("/admin/**").hasRole("ADMIN")
                 .antMatchers("/api/**", "/", "/recommend").authenticated()
                 .anyRequest().authenticated()

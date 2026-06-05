@@ -72,3 +72,15 @@ CREATE TABLE IF NOT EXISTS admission_major_group (
 
 CREATE INDEX IF NOT EXISTS idx_admission_group_lookup ON admission_major_group (source_subject, school_code, school_name, batch_name, major_group);
 ALTER TABLE admission_major_group ADD COLUMN IF NOT EXISTS source_row_no INT;
+
+CREATE TABLE IF NOT EXISTS access_log (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50),
+    path VARCHAR(120) NOT NULL,
+    remote_ip VARCHAR(60),
+    user_agent VARCHAR(255),
+    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_access_log_time ON access_log (create_time);
+CREATE INDEX IF NOT EXISTS idx_access_log_path ON access_log (path);

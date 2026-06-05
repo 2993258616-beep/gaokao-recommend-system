@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>商业版后台</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body class="admin-body">
+<header class="admin-top">
+    <div>
+        <h1>商业版后台</h1>
+        <p>账号、访问量和系统运营数据</p>
+    </div>
+    <nav>
+        <a th:href="@{/}">推荐页</a>
+        <a th:href="@{/admin/accounts}">账号管理</a>
+        <a th:href="@{/terms}">免责声明</a>
+    </nav>
+</header>
+
+<main class="admin-wrap">
+    <section class="metric-grid">
+        <div class="metric"><span>总账号</span><strong th:text="${totalUsers}">0</strong></div>
+        <div class="metric"><span>启用账号</span><strong th:text="${enabledUsers}">0</strong></div>
+        <div class="metric"><span>今日推荐</span><strong th:text="${recommendToday}">0</strong></div>
+        <div class="metric"><span>累计推荐</span><strong th:text="${recommendTotal}">0</strong></div>
+    </section>
+
+    <section class="admin-panel">
+        <h2>最近访问</h2>
+        <table class="admin-table">
+            <thead><tr><th>账号</th><th>路径</th><th>IP</th><th>时间</th></tr></thead>
+            <tbody>
+            <tr th:each="log : ${recentLogs}">
+                <td th:text="${log.username}">admin</td>
+                <td th:text="${log.path}">/api/recommend</td>
+                <td th:text="${log.remote_ip}">127.0.0.1</td>
+                <td th:text="${log.create_time}">2026-06-05</td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+</main>
+</body>
+</html>
