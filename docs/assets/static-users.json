@@ -1,6 +1,35 @@
 [
   {
     "username": "admin",
-    "passwordHash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9"
+    "passwordHash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
+    "bcryptHash": "$2a$10$h46S1SuP6KqJltv/A8/oUOJx7ni.S7vEJ1qCCDBBk6bFmeyD3deP."
+  },
+  {
+    "username": "abcde",
+    "bcryptHash": "$2a$10$5TvwSM5KkMBW0PlSJHA6RefWoJGonMF8nX1lDWO99rZuQszSHBWIq"
+  },
+  {
+    "username": "ljy123",
+    "bcryptHash": "$2a$10$ogr718WAV.csyFCCihYBh.w/gc42YtWDemnBYGRmajznXBTykGsXy"
+  },
+  {
+    "username": "h040522",
+    "bcryptHash": "$2a$10$CnViDwU44HBUQizpkquaEe.htqDuRK.zK2HkImNQTapArvpotkdbe"
+  },
+  {
+    "username": "wst123",
+    "bcryptHash": "$2a$10$1qbpI/biBfQOADmAPTp/FOJ1l3tZaRPxvUPHv0vDfWFUVvWiHoOca"
+  },
+  {
+    "username": "lsb123",
+    "bcryptHash": "$2a$10$nmWnHAakm0aHIB334N1voOksFc2YCMkXUg666ZkewvcwLo0S80.9e"
+  },
+  {
+    "username": "jgb789",
+    "bcryptHash": "$2a$10$miNFdqI3h73/SpTbKlOy/ejf9ilbXl3Z72zk0EyfK2Kf6YaPPoAnq"
+  },
+  {
+    "username": "jan123",
+    "bcryptHash": "$2a$10$XPZa/Zg2RGgGL93aFyANc.9jcqOi724h4/lX7TIPUJznjH2JtbkAG"
   }
 ]

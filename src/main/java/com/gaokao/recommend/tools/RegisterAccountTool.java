@@ -26,8 +26,10 @@ public class RegisterAccountTool {
     private static final String DB_PASSWORD = "";
     private static final String STATIC_ADMIN_HASH = "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9";
     private static final PasswordEncoder PASSWORD_ENCODER = new BCryptPasswordEncoder();
-    private static final Pattern STATIC_USER_PATTERN = Pattern.compile(
-            "\\{\\s*\"username\"\\s*:\\s*\"([A-Za-z0-9_]+)\"\\s*,\\s*\"passwordHash\"\\s*:\\s*\"([a-fA-F0-9]{64})\"\\s*\\}");
+    private static final Pattern STATIC_USER_PATTERN = Pattern.compile("\\{([^{}]+)\\}");
+    private static final Pattern USERNAME_PATTERN = Pattern.compile("\"username\"\\s*:\\s*\"([A-Za-z0-9_]+)\"");
+    private static final Pattern PASSWORD_HASH_PATTERN = Pattern.compile("\"passwordHash\"\\s*:\\s*\"([a-fA-F0-9]{64})\"");
+    private static final Pattern BCRYPT_HASH_PATTERN = Pattern.compile("\"bcryptHash\"\\s*:\\s*\"(\\$2[aby]?\\$[0-9]{2}\\$[A-Za-z0-9./]{53})\"");
 
     public static void main(String[] args) throws Exception {
         AccountInput input = readInput(args);
@@ -43,7 +45,7 @@ public class RegisterAccountTool {
                 createUser(connection, input.username, encodedPassword);
                 System.out.println("Account created: " + input.username);
             }
-            syncStaticAccount(input.username, input.password);
+            syncStaticAccount(input.username, input.password, encodedPassword);
             System.out.println("Saved to local database and public-page account list.");
         }
     }
@@ -121,40 +123,61 @@ public class RegisterAccountTool {
         }
     }
 
-    private static void syncStaticAccount(String username, String password) throws Exception {
+    private static void syncStaticAccount(String username, String password, String bcryptHash) throws Exception {
         String passwordHash = sha256(password);
-        syncStaticAccountFile(Paths.get("assets", "static-users.json"), username, passwordHash);
-        syncStaticAccountFile(Paths.get("docs", "assets", "static-users.json"), username, passwordHash);
+        syncStaticAccountFile(Paths.get("assets", "static-users.json"), username, passwordHash, bcryptHash);
+        syncStaticAccountFile(Paths.get("docs", "assets", "static-users.json"), username, passwordHash, bcryptHash);
     }
 
-    private static void syncStaticAccountFile(Path path, String username, String passwordHash) throws Exception {
-        LinkedHashMap<String, String> users = new LinkedHashMap<String, String>();
-        users.put("admin", STATIC_ADMIN_HASH);
+    private static void syncStaticAccountFile(Path path, String username, String passwordHash, String bcryptHash) throws Exception {
+        LinkedHashMap<String, StaticUser> users = new LinkedHashMap<String, StaticUser>();
+        users.put("admin", new StaticUser("admin", STATIC_ADMIN_HASH, null));
 
         if (Files.exists(path)) {
             String content = new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
             Matcher matcher = STATIC_USER_PATTERN.matcher(content);
             while (matcher.find()) {
-                users.put(matcher.group(1).toLowerCase(), matcher.group(2).toLowerCase());
+                String object = matcher.group(1);
+                String savedUsername = match(USERNAME_PATTERN, object);
+                if (savedUsername == null) {
+                    continue;
+                }
+                users.put(savedUsername.toLowerCase(), new StaticUser(
+                        savedUsername.toLowerCase(),
+                        match(PASSWORD_HASH_PATTERN, object),
+                        match(BCRYPT_HASH_PATTERN, object)));
             }
         }
 
-        users.put(username.toLowerCase(), passwordHash);
+        users.put(username.toLowerCase(), new StaticUser(username.toLowerCase(), passwordHash, bcryptHash));
         Files.createDirectories(path.getParent());
         Files.write(path, renderStaticUsers(users).getBytes(StandardCharsets.UTF_8));
     }
 
-    private static String renderStaticUsers(LinkedHashMap<String, String> users) {
+    private static String match(Pattern pattern, String value) {
+        Matcher matcher = pattern.matcher(value);
+        return matcher.find() ? matcher.group(1) : null;
+    }
+
+    private static String renderStaticUsers(LinkedHashMap<String, StaticUser> users) {
         StringBuilder builder = new StringBuilder("[\n");
         int index = 0;
-        for (Map.Entry<String, String> entry : users.entrySet()) {
+        for (Map.Entry<String, StaticUser> entry : users.entrySet()) {
+            StaticUser user = entry.getValue();
             if (index++ > 0) {
                 builder.append(",\n");
             }
             builder.append("  {\n")
-                    .append("    \"username\": \"").append(entry.getKey()).append("\",\n")
-                    .append("    \"passwordHash\": \"").append(entry.getValue()).append("\"\n")
-                    .append("  }");
+                    .append("    \"username\": \"").append(user.username).append("\"");
+            if (user.passwordHash != null && !user.passwordHash.isEmpty()) {
+                builder.append(",\n")
+                        .append("    \"passwordHash\": \"").append(user.passwordHash).append("\"");
+            }
+            if (user.bcryptHash != null && !user.bcryptHash.isEmpty()) {
+                builder.append(",\n")
+                        .append("    \"bcryptHash\": \"").append(user.bcryptHash).append("\"");
+            }
+            builder.append("\n  }");
         }
         builder.append("\n]\n");
         return builder.toString();
@@ -177,6 +200,18 @@ public class RegisterAccountTool {
         private AccountInput(String username, String password) {
             this.username = username;
             this.password = password;
+        }
+    }
+
+    private static class StaticUser {
+        private final String username;
+        private final String passwordHash;
+        private final String bcryptHash;
+
+        private StaticUser(String username, String passwordHash, String bcryptHash) {
+            this.username = username;
+            this.passwordHash = passwordHash;
+            this.bcryptHash = bcryptHash;
         }
     }
 }

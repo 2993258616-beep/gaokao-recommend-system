@@ -116,12 +116,19 @@ function bootApp() {
 
 async function verifyStaticLogin(username, password) {
     if (!username || !password) return false;
-    if (!window.crypto || !window.crypto.subtle) return false;
     const users = await loadStaticLoginUsers();
     const normalizedUsername = username.trim().toLowerCase();
-    const passwordHash = await sha256(password);
-    return users.some(user => String(user.username || '').trim().toLowerCase() === normalizedUsername
-        && String(user.passwordHash || user.hash || '') === passwordHash);
+    const matchedUsers = users.filter(user => String(user.username || '').trim().toLowerCase() === normalizedUsername);
+    if (!matchedUsers.length) return false;
+
+    const passwordHash = window.crypto && window.crypto.subtle ? await sha256(password) : '';
+    const bcrypt = window.dcodeIO && window.dcodeIO.bcrypt;
+    return matchedUsers.some(user => {
+        const shaHash = String(user.passwordHash || user.hash || '').trim();
+        if (shaHash && passwordHash && shaHash === passwordHash) return true;
+        const bcryptHash = String(user.bcryptHash || '').trim();
+        return Boolean(bcryptHash && bcrypt && bcrypt.compareSync(password, bcryptHash));
+    });
 }
 
 async function loadStaticLoginUsers() {
