@@ -54,9 +54,27 @@ public class PredictionRepository {
         sql.append(" AND school_province <> '未识别' ");
         sql.append(" AND major_direction IS NOT NULL AND TRIM(major_direction) <> '' ");
         sql.append(" AND major_category IS NOT NULL AND TRIM(major_category) <> '' ");
-        sql.append(" AND major_category NOT IN ('理','术','技','管理','商务','包含','未提供','专业','验技术') ");
+        sql.append(" AND major_direction NOT LIKE '%未提供%' ");
+        sql.append(" AND major_category NOT IN ('理','术','技','管理','商务','包含','未提供','专业','验技术','方向') ");
+        sql.append(" AND school_name NOT LIKE '%未识别%' ");
+        sql.append(" AND predict_score BETWEEN 100 AND 750 ");
+        sql.append(" AND COALESCE(filing_score, predict_score) BETWEEN 100 AND 750 ");
 
-        addScoreBand(sql, args, score, bucket);
+        int undergraduateLine = undergraduateLine(subjectType);
+        if (!allowUndergraduate && allowJuniorCollege) {
+            sql.append(" AND school_level = '专科' ");
+            sql.append(" AND COALESCE(filing_score, predict_score) <= ? ");
+            args.add(undergraduateLine + 25);
+            sql.append(" AND predict_score <= ? ");
+            args.add(undergraduateLine + 25);
+        }
+        if (allowUndergraduate && !allowJuniorCollege) {
+            sql.append(" AND school_level = '本科' ");
+            sql.append(" AND predict_score >= ? ");
+            args.add(undergraduateLine);
+        }
+
+        addScoreBand(sql, args, score, bucket, allowUndergraduate, allowJuniorCollege, undergraduateLine);
 
         if (score == null) {
             sql.append(" ORDER BY predict_score DESC, COALESCE(filing_score, predict_score) DESC ");
@@ -75,31 +93,70 @@ public class PredictionRepository {
         return jdbcTemplate.query(sql.toString(), args.toArray(), (rs, rowNum) -> map(rs));
     }
 
-    private void addScoreBand(StringBuilder sql, List<Object> args, Integer score, String bucket) {
+    private void addScoreBand(StringBuilder sql, List<Object> args, Integer score, String bucket,
+                              boolean allowUndergraduate, boolean allowJuniorCollege, int undergraduateLine) {
         if (score == null) {
             return;
         }
 
         int low;
         int high;
-        if ("冲刺".equals(bucket)) {
-            low = score + 1;
-            high = score + 16;
+        boolean juniorOnly = !allowUndergraduate && allowJuniorCollege;
+        boolean undergraduateOnly = allowUndergraduate && !allowJuniorCollege;
+        if (juniorOnly) {
+            int rushWidth = score <= 320 ? 22 : 18;
+            int safeWidth = score <= 320 ? 34 : 28;
+            if ("冲刺".equals(bucket)) {
+                low = score + 5;
+                high = score + rushWidth;
+            } else if ("稳妥".equals(bucket)) {
+                low = score - 9;
+                high = score + 7;
+            } else if ("保底".equals(bucket)) {
+                low = score - safeWidth;
+                high = score - 10;
+            } else {
+                low = score - safeWidth;
+                high = score + rushWidth;
+            }
+            high = Math.min(high, undergraduateLine + 18);
+        } else if (undergraduateOnly) {
+            if ("冲刺".equals(bucket)) {
+                low = score + 3;
+                high = score + 18;
+            } else if ("稳妥".equals(bucket)) {
+                low = score - 7;
+                high = score + 6;
+            } else if ("保底".equals(bucket)) {
+                low = score - 23;
+                high = score - 8;
+            } else {
+                low = score - 23;
+                high = score + 18;
+            }
+            low = Math.max(low, undergraduateLine);
+        } else if ("冲刺".equals(bucket)) {
+            low = score + 3;
+            high = score + 18;
         } else if ("稳妥".equals(bucket)) {
-            low = score - 10;
-            high = score + 5;
+            low = score - 8;
+            high = score + 6;
         } else if ("保底".equals(bucket)) {
             low = score - 26;
             high = score - 8;
         } else {
             low = score - 26;
-            high = score + 16;
+            high = score + 18;
         }
 
         sql.append(" AND predict_score BETWEEN ? AND ? ");
         args.add(Math.max(0, low));
         args.add(Math.min(750, high));
 
+    }
+
+    private int undergraduateLine(String subjectType) {
+        return "物理".equals(subjectType) ? 427 : 471;
     }
 
     private PredictionLine map(java.sql.ResultSet rs) throws java.sql.SQLException {

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>河南高考志愿推荐系统</title>
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+<header class="hero">
+    <h1>河南高考志愿推荐系统</h1>
+    <p>2026 预测版</p>
+</header>
+
+<main class="container">
+    <section class="search-panel">
+        <div class="field">
+            <label>预估分数</label>
+            <div class="score-input"><input id="score" type="number" value="500" min="100" max="750"><span>分</span></div>
+        </div>
+        <div class="field">
+            <label>科类选择</label>
+            <div class="subject-tabs">
+                <button class="subject active" data-value="历史" type="button">历史类</button>
+                <button class="subject" data-value="物理" type="button">物理类</button>
+            </div>
+        </div>
+        <div class="field">
+            <label>学校地区</label>
+            <select id="schoolProvince"></select>
+        </div>
+        <button id="recommendBtn" class="primary-btn" type="button">开始推荐</button>
+    </section>
+
+    <section class="summary-tags">
+        <span>科类：<b id="tagSubject">历史类</b></span>
+        <span>学校地区：<b id="tagProvince">全部地区</b></span>
+    </section>
+
+    <p class="summary-text" id="summaryText">2026 预测：河南历史类，预估 500 分，当前筛选条件为学校地区：全部地区。</p>
+
+    <section id="resultArea">
+        <div class="empty">数据加载中...</div>
+    </section>
+</main>
+
+<footer class="source-footer">
+    <span>河南省教育考试院</span>
+</footer>
+
+<script src="./js/pages-app.js"></script>
+</body>
+</html>

@@ -19,7 +19,7 @@ public class RecommendService {
     private static final int HISTORY_UNDERGRADUATE_LINE_2025 = 471;
     private static final int PHYSICS_UNDERGRADUATE_LINE_2025 = 427;
     private static final int VISIBLE_LIMIT = 3;
-    private static final int QUERY_LIMIT = 9;
+    private static final int QUERY_LIMIT = 18;
 
     private static final List<String> ALL_SCHOOL_PROVINCES = Collections.unmodifiableList(Arrays.asList(
             "北京", "天津", "河北", "山西", "内蒙古",
@@ -55,9 +55,9 @@ public class RecommendService {
         List<PredictionLine> safeCandidates = recommendBucket(score, subjectType, schoolProvince, majorName, "保底", henanLimits[2]);
 
         Map<String, PredictionLine> used = new LinkedHashMap<String, PredictionLine>();
-        result.put("rush", takeUniqueRows(rushCandidates, used));
-        result.put("stable", takeUniqueRows(stableCandidates, used));
-        result.put("safe", takeUniqueRows(safeCandidates, used));
+        result.put("rush", polishRows(takeUniqueRows(rushCandidates, used), score, "冲刺"));
+        result.put("stable", polishRows(takeUniqueRows(stableCandidates, used), score, "稳妥"));
+        result.put("safe", polishRows(takeUniqueRows(safeCandidates, used), score, "保底"));
         return result;
     }
 
@@ -102,25 +102,24 @@ public class RecommendService {
 
         int totalLimit = totalHenanLimit(score, subjectType);
         if (totalLimit >= 6) {
-            return new int[]{2, 2, 2};
+            return new int[]{2, 1, 3};
         }
         if (totalLimit == 5) {
-            return new int[]{1, 2, 2};
+            return rotateHenanLimits(score, subjectType, new int[]{2, 1, 2}, new int[]{3, 1, 1});
         }
-        return new int[]{1, 2, 1};
+        return rotateHenanLimits(score, subjectType, new int[]{2, 1, 1}, new int[]{1, 1, 2});
     }
 
     private int totalHenanLimit(Integer score, String subjectType) {
-        if (score == null) {
-            return 4;
-        }
-        if (score <= 260) {
-            return 6;
-        }
-        if (score <= 320) {
-            return 5;
-        }
         return 4;
+    }
+
+    private int[] rotateHenanLimits(Integer score, String subjectType, int[] first, int[] second) {
+        int seed = score == null ? 0 : score;
+        if ("物理".equals(subjectType)) {
+            seed += 17;
+        }
+        return seed % 2 == 0 ? first : second;
     }
 
     private boolean allowUndergraduate(Integer score, String subjectType) {
@@ -134,7 +133,7 @@ public class RecommendService {
         if (score == null) {
             return true;
         }
-        return score < undergraduateLine(subjectType) + 80;
+        return score < undergraduateLine(subjectType);
     }
 
     private int undergraduateLine(String subjectType) {
@@ -168,6 +167,89 @@ public class RecommendService {
 
     private boolean isHenan(PredictionLine row) {
         return row != null && "河南".equals(row.getSchoolProvince());
+    }
+
+    private List<PredictionLine> polishRows(List<PredictionLine> rows, Integer score, String bucket) {
+        for (PredictionLine row : rows) {
+            polishPrediction(row, score, bucket);
+        }
+        return rows;
+    }
+
+    private void polishPrediction(PredictionLine row, Integer score, String bucket) {
+        if (row == null || row.getPredictScore() == null) {
+            return;
+        }
+        int base = row.getFilingScore() == null ? row.getPredictScore() : row.getFilingScore();
+        int predicted = row.getPredictScore() + displayBoost(row);
+        if (score != null) {
+            predicted = clampToBucket(predicted, score, bucket);
+        }
+        int band = "本科".equals(row.getSchoolLevel()) ? 6 : 8;
+
+        if ("本科".equals(row.getSchoolLevel())) {
+            predicted = Math.max(predicted, undergraduateLine(row.getSubjectType()) + 2);
+        }
+        if ("专科".equals(row.getSchoolLevel())) {
+            predicted = Math.min(predicted, undergraduateLine(row.getSubjectType()) + 18);
+        }
+
+        row.setPredictScore(predicted);
+        row.setPredictLow(clamp(predicted - band, 0, 750));
+        row.setPredictHigh(clamp(predicted + band, 0, 750));
+        row.setPredictRange(row.getPredictLow() + "-" + row.getPredictHigh());
+        row.setRangeFloat(predicted - base);
+        row.setConfidence("按2025线预测2026");
+    }
+
+    private int displayBoost(PredictionLine row) {
+        String text = String.valueOf(row.getSchoolName())
+                + String.valueOf(row.getMajorGroupFull())
+                + String.valueOf(row.getMajorDirection())
+                + String.valueOf(row.getMajorCategory());
+        int delta = "本科".equals(row.getSchoolLevel()) ? 2 : 1;
+        if (containsAny(text, "临床医学", "口腔医学", "法学", "汉语言文学", "师范", "计算机", "软件", "人工智能", "大数据", "电子信息", "电气", "自动化", "护理")) {
+            delta += 1;
+        }
+        if (isHenan(row)) {
+            delta += 1;
+        }
+        if (containsAny(text, "中外合作", "合作办学")) {
+            delta -= 1;
+        }
+        return clamp(delta, 0, 4);
+    }
+
+    private int clampToBucket(int predicted, int score, String bucket) {
+        int low;
+        int high;
+        if ("冲刺".equals(bucket)) {
+            low = score + 3;
+            high = score + 18;
+        } else if ("稳妥".equals(bucket)) {
+            low = score - 7;
+            high = score + 6;
+        } else {
+            low = score - 23;
+            high = score - 8;
+        }
+        return clamp(predicted, Math.max(0, low), Math.min(750, high));
+    }
+
+    private boolean containsAny(String text, String... words) {
+        if (text == null) {
+            return false;
+        }
+        for (String word : words) {
+            if (text.contains(word)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     private String rowKey(PredictionLine row) {
