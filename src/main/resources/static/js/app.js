@@ -1,6 +1,6 @@
 let subjectType = '历史';
 const MAX_VISIBLE_ROWS = 3;
-const PLAN_COUNT = 3;
+const PLAN_COUNT = 6;
 const $ = id => document.getElementById(id);
 let recommendNonce = 0;
 let lastCriteriaKey = '';

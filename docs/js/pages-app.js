@@ -3,7 +3,7 @@ let predictionLines = [];
 
 const MAX_VISIBLE_ROWS = 3;
 const QUERY_LIMIT = 18;
-const PLAN_COUNT = 3;
+const PLAN_COUNT = 6;
 const HISTORY_UNDERGRADUATE_LINE_2025 = 471;
 const PHYSICS_UNDERGRADUATE_LINE_2025 = 427;
 const NEAR_UNDERGRADUATE_MARGIN = 20;
@@ -356,10 +356,13 @@ function takeUniqueRows(candidates, used) {
 function varyCandidateOrder(candidates, score, subject, schoolProvince, bucket) {
     const plan = recommendNonce % PLAN_COUNT;
     if (plan <= 0 || candidates.length <= MAX_VISIBLE_ROWS) return candidates;
-    const windowSize = Math.min(candidates.length, Math.max(MAX_VISIBLE_ROWS + 3, 9));
+    const windowSize = Math.min(candidates.length, Math.max(MAX_VISIBLE_ROWS * PLAN_COUNT, 9));
     const head = candidates.slice(0, windowSize);
     const rest = candidates.slice(windowSize);
-    const offset = seededOffset(`${score}|${subject}|${schoolProvince}|${bucket}|${plan}`, head.length);
+    let offset = (plan * MAX_VISIBLE_ROWS) % head.length;
+    if (offset === 0 && head.length > MAX_VISIBLE_ROWS) {
+        offset = Math.min(MAX_VISIBLE_ROWS, head.length - MAX_VISIBLE_ROWS);
+    }
     return head.slice(offset).concat(head.slice(0, offset), rest);
 }
 

@@ -20,7 +20,7 @@ public class RecommendService {
     private static final int PHYSICS_UNDERGRADUATE_LINE_2025 = 427;
     private static final int VISIBLE_LIMIT = 3;
     private static final int QUERY_LIMIT = 18;
-    private static final int PLAN_COUNT = 3;
+    private static final int PLAN_COUNT = 6;
     private static final int NEAR_UNDERGRADUATE_MARGIN = 20;
     private static final List<String> HIGH_QUALITY_JUNIOR_COLLEGE_KEYWORDS = Collections.unmodifiableList(Arrays.asList(
             "黄河水利职业技术学院", "河南工业职业技术学院", "河南职业技术学院", "河南农业职业学院", "许昌职业技术学院",
@@ -148,9 +148,11 @@ public class RecommendService {
         if (plan <= 0 || candidates.size() <= VISIBLE_LIMIT) {
             return candidates;
         }
-        int windowSize = Math.min(candidates.size(), Math.max(VISIBLE_LIMIT + 3, 9));
-        int offset = seededOffset(String.valueOf(score) + "|" + String.valueOf(subjectType) + "|"
-                + String.valueOf(schoolProvince) + "|" + bucket + "|" + plan, windowSize);
+        int windowSize = Math.min(candidates.size(), Math.max(VISIBLE_LIMIT * PLAN_COUNT, 9));
+        int offset = (plan * VISIBLE_LIMIT) % windowSize;
+        if (offset == 0 && windowSize > VISIBLE_LIMIT) {
+            offset = Math.min(VISIBLE_LIMIT, windowSize - VISIBLE_LIMIT);
+        }
 
         List<PredictionLine> varied = new ArrayList<PredictionLine>();
         for (int i = offset; i < windowSize; i++) {
