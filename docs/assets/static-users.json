@@ -26,7 +26,8 @@
   },
   {
     "username": "jgb789",
-    "bcryptHash": "$2a$10$miNFdqI3h73/SpTbKlOy/ejf9ilbXl3Z72zk0EyfK2Kf6YaPPoAnq"
+    "passwordHash": "72028b2e641dd59cc5ece6e7c73e7488537b74d5c6267875209b2151733541d0",
+    "bcryptHash": "$2a$10$J8lvDMFCnk1SfBuxEW5PnOodWyZ9axU9/WB525BT.qb387czTnhmG"
   },
   {
     "username": "jan123",
