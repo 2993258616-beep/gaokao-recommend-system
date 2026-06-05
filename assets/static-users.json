@@ -31,5 +31,10 @@
   {
     "username": "jan123",
     "bcryptHash": "$2a$10$XPZa/Zg2RGgGL93aFyANc.9jcqOi724h4/lX7TIPUJznjH2JtbkAG"
+  },
+  {
+    "username": "qwe123",
+    "passwordHash": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+    "bcryptHash": "$2a$10$Xw.d0/gif5AZY4HCS/0rmeunn8YEEzQd4nM2cNShFFDzJiYp5Kuyi"
   }
 ]
