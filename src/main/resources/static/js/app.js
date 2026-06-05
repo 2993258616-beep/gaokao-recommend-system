@@ -1,6 +1,7 @@
 let subjectType = '历史';
 const MAX_VISIBLE_ROWS = 3;
 const $ = id => document.getElementById(id);
+let recommendNonce = 0;
 setupSessionGuard();
 
 document.querySelectorAll('.subject').forEach(btn => {
@@ -12,7 +13,10 @@ document.querySelectorAll('.subject').forEach(btn => {
     });
 });
 
-$('recommendBtn').addEventListener('click', renderRecommend);
+$('recommendBtn').addEventListener('click', () => {
+    recommendNonce += 1;
+    renderRecommend();
+});
 
 function renderRecommend() {
     const score = $('score').value || 500;
@@ -21,7 +25,7 @@ function renderRecommend() {
     $('tagProvince').innerText = schoolProvince;
     $('summaryText').innerText = `按历史录取数据参考：河南${subjectType}类，预估 ${score} 分，筛选条件为学校地区：${schoolProvince}。`;
 
-    fetch(`/api/recommend?score=${encodeURIComponent(score)}&subjectType=${encodeURIComponent(subjectType)}&schoolProvince=${encodeURIComponent(schoolProvince)}`, {
+    fetch(`/api/recommend?score=${encodeURIComponent(score)}&subjectType=${encodeURIComponent(subjectType)}&schoolProvince=${encodeURIComponent(schoolProvince)}&nonce=${encodeURIComponent(recommendNonce)}`, {
         credentials: 'same-origin',
         cache: 'no-store'
     })
@@ -85,15 +89,34 @@ function isJuniorCollege(row) {
 }
 
 function renderMajorList(value) {
-    const text = String(value == null ? '' : value).trim();
+    const text = normalizeMajorName(String(value == null ? '' : value).trim());
     if (!text) return '';
-    const parts = text.split(/[、,，;；]/).map(v => v.trim()).filter(Boolean);
+    const parts = text.split(/[、,，;；]/).map(v => normalizeMajorName(v.trim())).filter(Boolean);
     if (parts.length <= 1) {
         return `<span class="major-text">${escapeHtml(text)}</span>`;
     }
     const visibleParts = parts.slice(0, 3);
     const suffix = parts.length > 3 ? '<span class="major-chip more">等</span>' : '';
     return `<div class="major-list">${visibleParts.map(v => `<span class="major-chip">${escapeHtml(v)}</span>`).join('')}${suffix}</div>`;
+}
+
+function normalizeMajorName(value) {
+    return value
+        .replace(/^锁经营与管理$/, '连锁经营与管理')
+        .replace(/^件技术/, '软件技术')
+        .replace(/^字媒体技术/, '数字媒体技术')
+        .replace(/^媒体技术$/, '数字媒体技术')
+        .replace(/^据与财务管理/, '大数据与财务管理')
+        .replace(/^让算机/, '计算机')
+        .replace(/^安金技术管理/, '安全技术管理')
+        .replace(/^电[于予]商务/, '电子商务')
+        .replace(/^上商企业管理/, '工商企业管理')
+        .replace(/^前教育\(师范\)/, '学前教育(师范)')
+        .replace(/^学英语教育\(师范\)/, '小学英语教育(师范)')
+        .replace(/^能技术应用$/, '人工智能技术应用')
+        .replace(/^术应用$/, '云计算技术应用')
+        .replace(/置播电/g, '直播电商')
+        .replace(/管、理与服务/g, '管理与服务');
 }
 
 function escapeHtml(value) {

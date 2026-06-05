@@ -35,6 +35,7 @@ const HIGH_QUALITY_JUNIOR_COLLEGE_KEYWORDS = [
 
 const $ = id => document.getElementById(id);
 let appBooted = false;
+let recommendNonce = 0;
 
 setupStaticLogin();
 
@@ -47,7 +48,10 @@ document.querySelectorAll('.subject').forEach(btn => {
     });
 });
 
-$('recommendBtn').addEventListener('click', renderRecommend);
+$('recommendBtn').addEventListener('click', () => {
+    recommendNonce += 1;
+    renderRecommend();
+});
 
 function setupStaticLogin() {
     const loginView = $('loginView');
@@ -151,9 +155,9 @@ function recommend(score, subject, schoolProvince) {
 
     const used = new Map();
     return {
-        rush: takeUniqueRows(rushCandidates, used).map(row => polishPrediction(row, score, '冲刺')),
-        stable: takeUniqueRows(stableCandidates, used).map(row => polishPrediction(row, score, '稳妥')),
-        safe: takeUniqueRows(safeCandidates, used).map(row => polishPrediction(row, score, '保底'))
+        rush: takeUniqueRows(varyCandidateOrder(rushCandidates, score, subject, schoolProvince, '冲刺'), used).map(row => polishPrediction(row, score, '冲刺')),
+        stable: takeUniqueRows(varyCandidateOrder(stableCandidates, score, subject, schoolProvince, '稳妥'), used).map(row => polishPrediction(row, score, '稳妥')),
+        safe: takeUniqueRows(varyCandidateOrder(safeCandidates, score, subject, schoolProvince, '保底'), used).map(row => polishPrediction(row, score, '保底'))
     };
 }
 
@@ -293,6 +297,23 @@ function takeUniqueRows(candidates, used) {
     return rows;
 }
 
+function varyCandidateOrder(candidates, score, subject, schoolProvince, bucket) {
+    if (recommendNonce <= 0 || candidates.length <= MAX_VISIBLE_ROWS) return candidates;
+    const windowSize = Math.min(candidates.length, Math.max(MAX_VISIBLE_ROWS + 3, 9));
+    const head = candidates.slice(0, windowSize);
+    const rest = candidates.slice(windowSize);
+    const offset = seededOffset(`${score}|${subject}|${schoolProvince}|${bucket}|${recommendNonce}`, head.length);
+    return head.slice(offset).concat(head.slice(0, offset), rest);
+}
+
+function seededOffset(value, size) {
+    let hash = 0;
+    for (let i = 0; i < value.length; i++) {
+        hash = ((hash << 5) - hash + value.charCodeAt(i)) | 0;
+    }
+    return Math.abs(hash) % Math.max(1, size);
+}
+
 function mixHenanRows(all, henan, preferredHenanCount) {
     const selected = new Map();
     let henanAdded = 0;
@@ -364,13 +385,32 @@ function section(type, word, title, desc, rows) {
 }
 
 function renderMajorList(value) {
-    const text = String(value == null ? '' : value).trim();
+    const text = normalizeMajorName(String(value == null ? '' : value).trim());
     if (!text) return '';
-    const parts = text.split(/[、,，;；]/).map(v => v.trim()).filter(Boolean);
+    const parts = text.split(/[、,，;；]/).map(v => normalizeMajorName(v.trim())).filter(Boolean);
     if (parts.length <= 1) return `<span class="major-text">${escapeHtml(text)}</span>`;
     const visibleParts = parts.slice(0, 3);
     const suffix = parts.length > 3 ? '<span class="major-chip more">等</span>' : '';
     return `<div class="major-list">${visibleParts.map(v => `<span class="major-chip">${escapeHtml(v)}</span>`).join('')}${suffix}</div>`;
+}
+
+function normalizeMajorName(value) {
+    return value
+        .replace(/^锁经营与管理$/, '连锁经营与管理')
+        .replace(/^件技术/, '软件技术')
+        .replace(/^字媒体技术/, '数字媒体技术')
+        .replace(/^媒体技术$/, '数字媒体技术')
+        .replace(/^据与财务管理/, '大数据与财务管理')
+        .replace(/^让算机/, '计算机')
+        .replace(/^安金技术管理/, '安全技术管理')
+        .replace(/^电[于予]商务/, '电子商务')
+        .replace(/^上商企业管理/, '工商企业管理')
+        .replace(/^前教育\(师范\)/, '学前教育(师范)')
+        .replace(/^学英语教育\(师范\)/, '小学英语教育(师范)')
+        .replace(/^能技术应用$/, '人工智能技术应用')
+        .replace(/^术应用$/, '云计算技术应用')
+        .replace(/置播电/g, '直播电商')
+        .replace(/管、理与服务/g, '管理与服务');
 }
 
 function undergraduateLine(subject) {

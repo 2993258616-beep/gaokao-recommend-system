@@ -35,7 +35,8 @@ public class RecommendApiController {
             @RequestParam(defaultValue = "500") Integer score,
             @RequestParam(defaultValue = "历史") String subjectType,
             @RequestParam(defaultValue = "全部地区") String schoolProvince,
-            @RequestParam(defaultValue = "全部专业") String majorName) {
-        return recommendService.recommend(score, subjectType, schoolProvince, majorName);
+            @RequestParam(defaultValue = "全部专业") String majorName,
+            @RequestParam(defaultValue = "0") Integer nonce) {
+        return recommendService.recommend(score, subjectType, schoolProvince, majorName, nonce);
     }
 }

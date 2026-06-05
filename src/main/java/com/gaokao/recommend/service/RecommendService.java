@@ -64,6 +64,10 @@ public class RecommendService {
     }
 
     public Map<String, List<PredictionLine>> recommend(Integer score, String subjectType, String schoolProvince, String majorName) {
+        return recommend(score, subjectType, schoolProvince, majorName, 0);
+    }
+
+    public Map<String, List<PredictionLine>> recommend(Integer score, String subjectType, String schoolProvince, String majorName, Integer nonce) {
         Map<String, List<PredictionLine>> result = new HashMap<String, List<PredictionLine>>();
         int[] henanLimits = henanLimitsByBucket(score, subjectType, schoolProvince);
         List<PredictionLine> rushCandidates = recommendBucket(score, subjectType, schoolProvince, majorName, "冲刺", henanLimits[0]);
@@ -71,9 +75,9 @@ public class RecommendService {
         List<PredictionLine> safeCandidates = recommendBucket(score, subjectType, schoolProvince, majorName, "保底", henanLimits[2]);
 
         Map<String, PredictionLine> used = new LinkedHashMap<String, PredictionLine>();
-        result.put("rush", polishRows(takeUniqueRows(rushCandidates, used), score, "冲刺"));
-        result.put("stable", polishRows(takeUniqueRows(stableCandidates, used), score, "稳妥"));
-        result.put("safe", polishRows(takeUniqueRows(safeCandidates, used), score, "保底"));
+        result.put("rush", polishRows(takeUniqueRows(varyCandidateOrder(rushCandidates, score, subjectType, schoolProvince, "冲刺", nonce), used), score, "冲刺"));
+        result.put("stable", polishRows(takeUniqueRows(varyCandidateOrder(stableCandidates, score, subjectType, schoolProvince, "稳妥", nonce), used), score, "稳妥"));
+        result.put("safe", polishRows(takeUniqueRows(varyCandidateOrder(safeCandidates, score, subjectType, schoolProvince, "保底", nonce), used), score, "保底"));
         return result;
     }
 
@@ -135,6 +139,36 @@ public class RecommendService {
             }
         }
         return rows;
+    }
+
+    private List<PredictionLine> varyCandidateOrder(List<PredictionLine> candidates, Integer score, String subjectType,
+                                                    String schoolProvince, String bucket, Integer nonce) {
+        if (nonce == null || nonce <= 0 || candidates.size() <= VISIBLE_LIMIT) {
+            return candidates;
+        }
+        int windowSize = Math.min(candidates.size(), Math.max(VISIBLE_LIMIT + 3, 9));
+        int offset = seededOffset(String.valueOf(score) + "|" + String.valueOf(subjectType) + "|"
+                + String.valueOf(schoolProvince) + "|" + bucket + "|" + nonce, windowSize);
+
+        List<PredictionLine> varied = new ArrayList<PredictionLine>();
+        for (int i = offset; i < windowSize; i++) {
+            varied.add(candidates.get(i));
+        }
+        for (int i = 0; i < offset; i++) {
+            varied.add(candidates.get(i));
+        }
+        for (int i = windowSize; i < candidates.size(); i++) {
+            varied.add(candidates.get(i));
+        }
+        return varied;
+    }
+
+    private int seededOffset(String value, int size) {
+        int hash = 0;
+        for (int i = 0; i < value.length(); i++) {
+            hash = 31 * hash + value.charAt(i);
+        }
+        return (hash & 0x7fffffff) % Math.max(1, size);
     }
 
     private int[] henanLimitsByBucket(Integer score, String subjectType, String schoolProvince) {
