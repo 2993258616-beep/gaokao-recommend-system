@@ -1,7 +1,9 @@
 let subjectType = '历史';
 const MAX_VISIBLE_ROWS = 3;
+const PLAN_COUNT = 3;
 const $ = id => document.getElementById(id);
 let recommendNonce = 0;
+let lastCriteriaKey = '';
 setupSessionGuard();
 
 document.querySelectorAll('.subject').forEach(btn => {
@@ -9,18 +11,41 @@ document.querySelectorAll('.subject').forEach(btn => {
         document.querySelectorAll('.subject').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         subjectType = btn.dataset.value;
-        renderRecommend();
+        resetPlanAndRender();
     });
 });
 
 $('recommendBtn').addEventListener('click', () => {
-    recommendNonce += 1;
+    const criteriaKey = getCurrentCriteriaKey();
+    if (criteriaKey === lastCriteriaKey) {
+        recommendNonce = (recommendNonce + 1) % PLAN_COUNT;
+    } else {
+        recommendNonce = 0;
+        lastCriteriaKey = criteriaKey;
+    }
     renderRecommend();
 });
+
+function resetPlanAndRender() {
+    recommendNonce = 0;
+    lastCriteriaKey = getCurrentCriteriaKey();
+    renderRecommend();
+}
+
+function getCurrentCriteriaKey() {
+    const score = $('score').value || 500;
+    const schoolProvince = $('schoolProvince').value;
+    return `${score}|${subjectType}|${schoolProvince}`;
+}
 
 function renderRecommend() {
     const score = $('score').value || 500;
     const schoolProvince = $('schoolProvince').value;
+    const criteriaKey = `${score}|${subjectType}|${schoolProvince}`;
+    if (criteriaKey !== lastCriteriaKey) {
+        recommendNonce = 0;
+        lastCriteriaKey = criteriaKey;
+    }
     $('tagSubject').innerText = subjectType + '类';
     $('tagProvince').innerText = schoolProvince;
     $('summaryText').innerText = `按历史录取数据参考：河南${subjectType}类，预估 ${score} 分，筛选条件为学校地区：${schoolProvince}。`;
@@ -168,4 +193,4 @@ function setupSessionGuard() {
     window.addEventListener('beforeunload', closeSession);
 }
 
-renderRecommend();
+resetPlanAndRender();

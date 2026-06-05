@@ -3,6 +3,7 @@ let predictionLines = [];
 
 const MAX_VISIBLE_ROWS = 3;
 const QUERY_LIMIT = 18;
+const PLAN_COUNT = 3;
 const HISTORY_UNDERGRADUATE_LINE_2025 = 471;
 const PHYSICS_UNDERGRADUATE_LINE_2025 = 427;
 const NEAR_UNDERGRADUATE_MARGIN = 20;
@@ -36,6 +37,7 @@ const HIGH_QUALITY_JUNIOR_COLLEGE_KEYWORDS = [
 const $ = id => document.getElementById(id);
 let appBooted = false;
 let recommendNonce = 0;
+let lastCriteriaKey = '';
 
 setupStaticLogin();
 
@@ -44,12 +46,18 @@ document.querySelectorAll('.subject').forEach(btn => {
         document.querySelectorAll('.subject').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         subjectType = btn.dataset.value;
-        renderRecommend();
+        resetPlanAndRender();
     });
 });
 
 $('recommendBtn').addEventListener('click', () => {
-    recommendNonce += 1;
+    const criteriaKey = getCurrentCriteriaKey();
+    if (criteriaKey === lastCriteriaKey) {
+        recommendNonce = (recommendNonce + 1) % PLAN_COUNT;
+    } else {
+        recommendNonce = 0;
+        lastCriteriaKey = criteriaKey;
+    }
     renderRecommend();
 });
 
@@ -120,7 +128,7 @@ async function init() {
         const response = await fetch('./assets/prediction-lines.json', { cache: 'no-store' });
         if (!response.ok) throw new Error('数据文件读取失败');
         predictionLines = await response.json();
-        renderRecommend();
+        resetPlanAndRender();
     } catch (err) {
         $('resultArea').innerHTML = `<div class="empty">加载失败：${escapeHtml(err.message)}</div>`;
     }
@@ -132,11 +140,28 @@ function renderProvinceOptions() {
         .join('');
 }
 
+function resetPlanAndRender() {
+    recommendNonce = 0;
+    lastCriteriaKey = getCurrentCriteriaKey();
+    renderRecommend();
+}
+
+function getCurrentCriteriaKey() {
+    const score = Number($('score').value || 500);
+    const schoolProvince = $('schoolProvince').value || '全部地区';
+    return `${score}|${subjectType}|${schoolProvince}`;
+}
+
 function renderRecommend() {
     if (!predictionLines.length) return;
 
     const score = Number($('score').value || 500);
     const schoolProvince = $('schoolProvince').value || '全部地区';
+    const criteriaKey = `${score}|${subjectType}|${schoolProvince}`;
+    if (criteriaKey !== lastCriteriaKey) {
+        recommendNonce = 0;
+        lastCriteriaKey = criteriaKey;
+    }
     $('tagSubject').innerText = subjectType + '类';
     $('tagProvince').innerText = schoolProvince;
     $('summaryText').innerText = `按历史录取数据参考：河南${subjectType}类，预估 ${score} 分，筛选条件为学校地区：${schoolProvince}。`;
@@ -298,11 +323,12 @@ function takeUniqueRows(candidates, used) {
 }
 
 function varyCandidateOrder(candidates, score, subject, schoolProvince, bucket) {
-    if (recommendNonce <= 0 || candidates.length <= MAX_VISIBLE_ROWS) return candidates;
+    const plan = recommendNonce % PLAN_COUNT;
+    if (plan <= 0 || candidates.length <= MAX_VISIBLE_ROWS) return candidates;
     const windowSize = Math.min(candidates.length, Math.max(MAX_VISIBLE_ROWS + 3, 9));
     const head = candidates.slice(0, windowSize);
     const rest = candidates.slice(windowSize);
-    const offset = seededOffset(`${score}|${subject}|${schoolProvince}|${bucket}|${recommendNonce}`, head.length);
+    const offset = seededOffset(`${score}|${subject}|${schoolProvince}|${bucket}|${plan}`, head.length);
     return head.slice(offset).concat(head.slice(0, offset), rest);
 }
 
