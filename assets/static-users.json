@@ -14,7 +14,8 @@
   },
   {
     "username": "h040522",
-    "bcryptHash": "$2a$10$CnViDwU44HBUQizpkquaEe.htqDuRK.zK2HkImNQTapArvpotkdbe"
+    "passwordHash": "0670cd7bd6012520ea136d88e51bbd0bd8ca6b12d6db11887488bd7da16d5699",
+    "bcryptHash": "$2a$10$BvodGOaE9W0gO1evplnrt.eVm.T4UBTnhVXTZ7L7eq8rIsb3PxY5y"
   },
   {
     "username": "wst123",
