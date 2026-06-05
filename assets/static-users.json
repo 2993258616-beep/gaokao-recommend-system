@@ -22,7 +22,8 @@
   },
   {
     "username": "lsb123",
-    "bcryptHash": "$2a$10$nmWnHAakm0aHIB334N1voOksFc2YCMkXUg666ZkewvcwLo0S80.9e"
+    "passwordHash": "ed6e997596fea8f469cdbcdad8c63926c7398c4e56e97b3f343dd9a211a86fe6",
+    "bcryptHash": "$2a$10$iGuP38hLrSHht1b7KrjzX.FAYRZiAVwVuo8Ons6rXybRGYbM/xuba"
   },
   {
     "username": "jgb789",
