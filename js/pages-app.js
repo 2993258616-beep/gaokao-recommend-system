@@ -5,6 +5,10 @@ const MAX_VISIBLE_ROWS = 3;
 const QUERY_LIMIT = 18;
 const HISTORY_UNDERGRADUATE_LINE_2025 = 471;
 const PHYSICS_UNDERGRADUATE_LINE_2025 = 427;
+const NEAR_UNDERGRADUATE_MARGIN = 20;
+const STATIC_LOGIN_USER = 'admin';
+const STATIC_LOGIN_HASH = '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9';
+const STATIC_LOGIN_KEY = 'gaokao_pages_login_ok';
 const SCHOOL_PROVINCES = [
     '全部地区', '北京', '天津', '河北', '山西', '内蒙古',
     '辽宁', '吉林', '黑龙江', '上海', '江苏',
@@ -13,8 +17,26 @@ const SCHOOL_PROVINCES = [
     '海南', '重庆', '四川', '贵州', '云南',
     '西藏', '陕西', '甘肃', '青海', '宁夏', '新疆'
 ];
+const HIGH_QUALITY_JUNIOR_COLLEGE_KEYWORDS = [
+    '黄河水利职业技术学院', '河南工业职业技术学院', '河南职业技术学院', '河南农业职业学院', '许昌职业技术学院',
+    '郑州铁路职业技术学院', '河南经贸职业学院', '河南交通职业技术学院', '河南应用技术职业学院', '河南医学高等专科学校',
+    '北京电子科技职业学院', '北京工业职业技术学院', '天津市职业大学', '天津医学高等专科学校', '天津电子信息职业技术学院',
+    '石家庄铁路职业技术学院', '唐山工业职业技术学院', '山西工程职业学院', '辽宁省交通高等专科学校', '沈阳职业技术学院',
+    '长春汽车工业高等专科学校', '吉林铁道职业技术学院', '黑龙江建筑职业技术学院', '哈尔滨职业技术学院',
+    '上海工艺美术职业学院', '上海电子信息职业技术学院', '南京工业职业技术大学', '江苏农林职业技术学院', '常州信息职业技术学院',
+    '无锡职业技术学院', '江苏经贸职业技术学院', '金华职业技术大学', '浙江金融职业学院', '杭州职业技术学院',
+    '宁波职业技术学院', '温州职业技术学院', '芜湖职业技术学院', '安徽商贸职业技术学院', '福建船政交通职业学院',
+    '九江职业技术学院', '江西应用技术职业学院', '山东商业职业技术学院', '淄博职业学院', '日照职业技术学院',
+    '武汉职业技术学院', '武汉船舶职业技术学院', '武汉铁路职业技术学院', '长沙民政职业技术学院', '湖南铁道职业技术学院',
+    '广东轻工职业技术学院', '深圳职业技术大学', '广州番禺职业技术学院', '重庆电子工程职业学院', '重庆工业职业技术学院',
+    '成都航空职业技术学院', '四川交通职业技术学院', '贵州交通职业技术学院', '昆明冶金高等专科学校', '陕西工业职业技术学院',
+    '杨凌职业技术学院', '西安航空职业技术学院', '兰州资源环境职业技术大学', '宁夏职业技术学院', '新疆农业职业技术学院'
+];
 
 const $ = id => document.getElementById(id);
+let appBooted = false;
+
+setupStaticLogin();
 
 document.querySelectorAll('.subject').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -27,7 +49,66 @@ document.querySelectorAll('.subject').forEach(btn => {
 
 $('recommendBtn').addEventListener('click', renderRecommend);
 
-init();
+function setupStaticLogin() {
+    const loginView = $('loginView');
+    const appView = $('appView');
+    if (!loginView || !appView) {
+        bootApp();
+        return;
+    }
+
+    const showLogin = () => {
+        document.body.classList.add('locked');
+        loginView.hidden = false;
+        appView.hidden = true;
+        const pass = $('loginPass');
+        if (pass) pass.value = '';
+        setTimeout(() => $('loginUser') && $('loginUser').focus(), 0);
+    };
+    const showApp = () => {
+        document.body.classList.remove('locked');
+        loginView.hidden = true;
+        appView.hidden = false;
+        bootApp();
+    };
+
+    $('loginForm').addEventListener('submit', async event => {
+        event.preventDefault();
+        const ok = await verifyStaticLogin($('loginUser').value.trim(), $('loginPass').value);
+        $('loginError').hidden = ok;
+        if (!ok) return;
+        sessionStorage.setItem(STATIC_LOGIN_KEY, '1');
+        showApp();
+    });
+    $('staticLogout').addEventListener('click', () => {
+        sessionStorage.removeItem(STATIC_LOGIN_KEY);
+        showLogin();
+    });
+
+    if (sessionStorage.getItem(STATIC_LOGIN_KEY) === '1') {
+        showApp();
+    } else {
+        showLogin();
+    }
+}
+
+function bootApp() {
+    if (appBooted) return;
+    appBooted = true;
+    init();
+}
+
+async function verifyStaticLogin(username, password) {
+    if (username !== STATIC_LOGIN_USER || !password) return false;
+    if (!window.crypto || !window.crypto.subtle) return false;
+    return await sha256(password) === STATIC_LOGIN_HASH;
+}
+
+async function sha256(value) {
+    const data = new TextEncoder().encode(value);
+    const hash = await window.crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 async function init() {
     renderProvinceOptions();
@@ -78,17 +159,36 @@ function recommend(score, subject, schoolProvince) {
 
 function recommendBucket(score, subject, schoolProvince, bucket, preferredHenanCount) {
     const allRegions = !schoolProvince || schoolProvince === '全部地区';
-    const allowUndergraduate = score >= undergraduateLine(subject);
-    const allowJuniorCollege = score < undergraduateLine(subject);
-    const all = queryCandidates(score, subject, schoolProvince, bucket, allowUndergraduate, allowJuniorCollege, QUERY_LIMIT);
+    const nearLineJuniorCollege = shouldUseQualityJuniorCollege(score, subject, bucket);
+    const allowUndergraduate = score >= undergraduateLine(subject) && !nearLineJuniorCollege;
+    const allowJuniorCollege = score < undergraduateLine(subject) || nearLineJuniorCollege;
+    const all = queryCandidatesWithFallback(score, subject, schoolProvince, bucket, allowUndergraduate,
+        allowJuniorCollege, nearLineJuniorCollege, QUERY_LIMIT);
 
     if (!allRegions) return all;
 
-    const henan = queryCandidates(score, subject, '河南', bucket, allowUndergraduate, allowJuniorCollege, Math.max(preferredHenanCount + 2, 3));
+    const henan = queryCandidatesWithFallback(score, subject, '河南', bucket, allowUndergraduate,
+        allowJuniorCollege, nearLineJuniorCollege, Math.max(preferredHenanCount + 2, 3));
     return mixHenanRows(all, henan, preferredHenanCount);
 }
 
-function queryCandidates(score, subject, schoolProvince, bucket, allowUndergraduate, allowJuniorCollege, limit) {
+function queryCandidatesWithFallback(score, subject, schoolProvince, bucket, allowUndergraduate, allowJuniorCollege, preferQualityJuniorCollege, limit) {
+    const first = queryCandidates(score, subject, schoolProvince, bucket, allowUndergraduate, allowJuniorCollege,
+        preferQualityJuniorCollege, limit);
+    if (!preferQualityJuniorCollege || first.length >= MAX_VISIBLE_ROWS) {
+        return first;
+    }
+    const merged = new Map(first.map(row => [rowKey(row), row]));
+    const fallback = queryCandidates(score, subject, schoolProvince, bucket, allowUndergraduate, allowJuniorCollege,
+        false, limit);
+    for (const row of fallback) {
+        merged.set(rowKey(row), row);
+        if (merged.size >= limit) break;
+    }
+    return Array.from(merged.values());
+}
+
+function queryCandidates(score, subject, schoolProvince, bucket, allowUndergraduate, allowJuniorCollege, preferQualityJuniorCollege, limit) {
     const allRegions = !schoolProvince || schoolProvince === '全部地区';
     const line = undergraduateLine(subject);
     const [low, high] = scoreBand(score, bucket, allowUndergraduate, allowJuniorCollege, line);
@@ -100,6 +200,7 @@ function queryCandidates(score, subject, schoolProvince, bucket, allowUndergradu
         .filter(row => row.schoolProvince && row.schoolProvince !== '未识别')
         .filter(row => row.majorDirection && row.majorDirection.trim() && !row.majorDirection.includes('未提供'))
         .filter(row => row.majorCategory && row.majorCategory.trim() && !['理', '术', '技', '管理', '商务', '包含', '未提供', '专业', '验技术', '方向'].includes(row.majorCategory))
+        .filter(row => !preferQualityJuniorCollege || isHighQualityJuniorCollege(row))
         .filter(row => allowUndergraduate || row.schoolLevel !== '本科')
         .filter(row => allowJuniorCollege || row.schoolLevel !== '专科')
         .filter(row => !allowUndergraduate || allowJuniorCollege || row.schoolLevel === '本科')
@@ -116,6 +217,11 @@ function queryCandidates(score, subject, schoolProvince, bucket, allowUndergradu
         .filter(row => row.predictScore >= low && row.predictScore <= high)
         .sort((a, b) => compareRows(a, b, score, bucket))
         .slice(0, Math.max(1, Math.min(limit, 30)));
+}
+
+function shouldUseQualityJuniorCollege(score, subject, bucket) {
+    const line = undergraduateLine(subject);
+    return score >= line && score <= line + NEAR_UNDERGRADUATE_MARGIN && bucket !== '冲刺';
 }
 
 function scoreBand(score, bucket, allowUndergraduate, allowJuniorCollege, line) {
@@ -277,6 +383,12 @@ function scoreOf(row) {
 
 function isHenan(row) {
     return row && row.schoolProvince === '河南';
+}
+
+function isHighQualityJuniorCollege(row) {
+    if (!row || row.schoolLevel !== '专科') return false;
+    const name = row.schoolName || '';
+    return HIGH_QUALITY_JUNIOR_COLLEGE_KEYWORDS.some(keyword => name.includes(keyword));
 }
 
 function rowKey(row) {

@@ -6,10 +6,27 @@ import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 @Repository
 public class PredictionRepository {
+    private static final List<String> HIGH_QUALITY_JUNIOR_COLLEGE_KEYWORDS = Arrays.asList(
+            "黄河水利职业技术学院", "河南工业职业技术学院", "河南职业技术学院", "河南农业职业学院", "许昌职业技术学院",
+            "郑州铁路职业技术学院", "河南经贸职业学院", "河南交通职业技术学院", "河南应用技术职业学院", "河南医学高等专科学校",
+            "北京电子科技职业学院", "北京工业职业技术学院", "天津市职业大学", "天津医学高等专科学校", "天津电子信息职业技术学院",
+            "石家庄铁路职业技术学院", "唐山工业职业技术学院", "山西工程职业学院", "辽宁省交通高等专科学校", "沈阳职业技术学院",
+            "长春汽车工业高等专科学校", "吉林铁道职业技术学院", "黑龙江建筑职业技术学院", "哈尔滨职业技术学院",
+            "上海工艺美术职业学院", "上海电子信息职业技术学院", "南京工业职业技术大学", "江苏农林职业技术学院", "常州信息职业技术学院",
+            "无锡职业技术学院", "江苏经贸职业技术学院", "金华职业技术大学", "浙江金融职业学院", "杭州职业技术学院",
+            "宁波职业技术学院", "温州职业技术学院", "芜湖职业技术学院", "安徽商贸职业技术学院", "福建船政交通职业学院",
+            "九江职业技术学院", "江西应用技术职业学院", "山东商业职业技术学院", "淄博职业学院", "日照职业技术学院",
+            "武汉职业技术学院", "武汉船舶职业技术学院", "武汉铁路职业技术学院", "长沙民政职业技术学院", "湖南铁道职业技术学院",
+            "广东轻工职业技术学院", "深圳职业技术大学", "广州番禺职业技术学院", "重庆电子工程职业学院", "重庆工业职业技术学院",
+            "成都航空职业技术学院", "四川交通职业技术学院", "贵州交通职业技术学院", "昆明冶金高等专科学校", "陕西工业职业技术学院",
+            "杨凌职业技术学院", "西安航空职业技术学院", "兰州资源环境职业技术大学", "宁夏职业技术学院", "新疆农业职业技术学院"
+    );
+
     private final JdbcTemplate jdbcTemplate;
 
     public PredictionRepository(JdbcTemplate jdbcTemplate) {
@@ -22,7 +39,7 @@ public class PredictionRepository {
 
     public List<PredictionLine> recommend(Integer score, String subjectType, String schoolProvince, String majorName,
                                           String bucket, boolean allowUndergraduate, boolean allowJuniorCollege,
-                                          int limit) {
+                                          boolean preferQualityJuniorCollege, int limit) {
         StringBuilder sql = new StringBuilder();
         List<Object> args = new ArrayList<Object>();
 
@@ -73,6 +90,9 @@ public class PredictionRepository {
             sql.append(" AND predict_score >= ? ");
             args.add(undergraduateLine);
         }
+        if (preferQualityJuniorCollege) {
+            addHighQualityJuniorCollegeFilter(sql, args);
+        }
 
         addScoreBand(sql, args, score, bucket, allowUndergraduate, allowJuniorCollege, undergraduateLine);
 
@@ -91,6 +111,18 @@ public class PredictionRepository {
         sql.append(" LIMIT ").append(Math.max(1, Math.min(limit, 30)));
 
         return jdbcTemplate.query(sql.toString(), args.toArray(), (rs, rowNum) -> map(rs));
+    }
+
+    private void addHighQualityJuniorCollegeFilter(StringBuilder sql, List<Object> args) {
+        sql.append(" AND (");
+        for (int i = 0; i < HIGH_QUALITY_JUNIOR_COLLEGE_KEYWORDS.size(); i++) {
+            if (i > 0) {
+                sql.append(" OR ");
+            }
+            sql.append("school_name LIKE ? ");
+            args.add("%" + HIGH_QUALITY_JUNIOR_COLLEGE_KEYWORDS.get(i) + "%");
+        }
+        sql.append(") ");
     }
 
     private void addScoreBand(StringBuilder sql, List<Object> args, Integer score, String bucket,

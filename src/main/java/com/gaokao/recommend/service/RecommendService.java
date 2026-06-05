@@ -20,6 +20,22 @@ public class RecommendService {
     private static final int PHYSICS_UNDERGRADUATE_LINE_2025 = 427;
     private static final int VISIBLE_LIMIT = 3;
     private static final int QUERY_LIMIT = 18;
+    private static final int NEAR_UNDERGRADUATE_MARGIN = 20;
+    private static final List<String> HIGH_QUALITY_JUNIOR_COLLEGE_KEYWORDS = Collections.unmodifiableList(Arrays.asList(
+            "黄河水利职业技术学院", "河南工业职业技术学院", "河南职业技术学院", "河南农业职业学院", "许昌职业技术学院",
+            "郑州铁路职业技术学院", "河南经贸职业学院", "河南交通职业技术学院", "河南应用技术职业学院", "河南医学高等专科学校",
+            "北京电子科技职业学院", "北京工业职业技术学院", "天津市职业大学", "天津医学高等专科学校", "天津电子信息职业技术学院",
+            "石家庄铁路职业技术学院", "唐山工业职业技术学院", "山西工程职业学院", "辽宁省交通高等专科学校", "沈阳职业技术学院",
+            "长春汽车工业高等专科学校", "吉林铁道职业技术学院", "黑龙江建筑职业技术学院", "哈尔滨职业技术学院",
+            "上海工艺美术职业学院", "上海电子信息职业技术学院", "南京工业职业技术大学", "江苏农林职业技术学院", "常州信息职业技术学院",
+            "无锡职业技术学院", "江苏经贸职业技术学院", "金华职业技术大学", "浙江金融职业学院", "杭州职业技术学院",
+            "宁波职业技术学院", "温州职业技术学院", "芜湖职业技术学院", "安徽商贸职业技术学院", "福建船政交通职业学院",
+            "九江职业技术学院", "江西应用技术职业学院", "山东商业职业技术学院", "淄博职业学院", "日照职业技术学院",
+            "武汉职业技术学院", "武汉船舶职业技术学院", "武汉铁路职业技术学院", "长沙民政职业技术学院", "湖南铁道职业技术学院",
+            "广东轻工职业技术学院", "深圳职业技术大学", "广州番禺职业技术学院", "重庆电子工程职业学院", "重庆工业职业技术学院",
+            "成都航空职业技术学院", "四川交通职业技术学院", "贵州交通职业技术学院", "昆明冶金高等专科学校", "陕西工业职业技术学院",
+            "杨凌职业技术学院", "西安航空职业技术学院", "兰州资源环境职业技术大学", "宁夏职业技术学院", "新疆农业职业技术学院"
+    ));
 
     private static final List<String> ALL_SCHOOL_PROVINCES = Collections.unmodifiableList(Arrays.asList(
             "北京", "天津", "河北", "山西", "内蒙古",
@@ -63,20 +79,46 @@ public class RecommendService {
 
     private List<PredictionLine> recommendBucket(Integer score, String subjectType, String schoolProvince,
                                                  String majorName, String bucket, int preferredHenanCount) {
-        boolean allowUndergraduate = allowUndergraduate(score, subjectType);
-        boolean allowJuniorCollege = allowJuniorCollege(score, subjectType);
+        boolean nearLineJuniorCollege = shouldUseQualityJuniorCollege(score, subjectType, bucket);
+        boolean allowUndergraduate = allowUndergraduate(score, subjectType) && !nearLineJuniorCollege;
+        boolean allowJuniorCollege = allowJuniorCollege(score, subjectType) || nearLineJuniorCollege;
         boolean allRegions = !hasText(schoolProvince) || "全部地区".equals(schoolProvince);
 
         if (!allRegions) {
-            return predictionRepository.recommend(score, subjectType, schoolProvince, majorName, bucket,
-                    allowUndergraduate, allowJuniorCollege, QUERY_LIMIT);
+            return queryRecommendations(score, subjectType, schoolProvince, majorName, bucket,
+                    allowUndergraduate, allowJuniorCollege, nearLineJuniorCollege, QUERY_LIMIT);
         }
 
-        List<PredictionLine> all = predictionRepository.recommend(score, subjectType, schoolProvince, majorName,
-                bucket, allowUndergraduate, allowJuniorCollege, QUERY_LIMIT);
-        List<PredictionLine> henan = predictionRepository.recommend(score, subjectType, "河南", majorName,
-                bucket, allowUndergraduate, allowJuniorCollege, Math.max(preferredHenanCount + 2, 3));
+        List<PredictionLine> all = queryRecommendations(score, subjectType, schoolProvince, majorName,
+                bucket, allowUndergraduate, allowJuniorCollege, nearLineJuniorCollege, QUERY_LIMIT);
+        List<PredictionLine> henan = queryRecommendations(score, subjectType, "河南", majorName,
+                bucket, allowUndergraduate, allowJuniorCollege, nearLineJuniorCollege, Math.max(preferredHenanCount + 2, 3));
         return mixHenanRows(all, henan, preferredHenanCount);
+    }
+
+    private List<PredictionLine> queryRecommendations(Integer score, String subjectType, String schoolProvince,
+                                                       String majorName, String bucket, boolean allowUndergraduate,
+                                                       boolean allowJuniorCollege, boolean preferQualityJuniorCollege,
+                                                       int limit) {
+        List<PredictionLine> first = predictionRepository.recommend(score, subjectType, schoolProvince, majorName,
+                bucket, allowUndergraduate, allowJuniorCollege, preferQualityJuniorCollege, limit);
+        if (!preferQualityJuniorCollege || first.size() >= VISIBLE_LIMIT) {
+            return first;
+        }
+
+        LinkedHashMap<String, PredictionLine> merged = new LinkedHashMap<String, PredictionLine>();
+        for (PredictionLine row : first) {
+            merged.put(rowKey(row), row);
+        }
+        List<PredictionLine> fallback = predictionRepository.recommend(score, subjectType, schoolProvince, majorName,
+                bucket, allowUndergraduate, allowJuniorCollege, false, limit);
+        for (PredictionLine row : fallback) {
+            merged.put(rowKey(row), row);
+            if (merged.size() >= limit) {
+                break;
+            }
+        }
+        return new ArrayList<PredictionLine>(merged.values());
     }
 
     private List<PredictionLine> takeUniqueRows(List<PredictionLine> candidates, Map<String, PredictionLine> used) {
@@ -138,6 +180,26 @@ public class RecommendService {
 
     private int undergraduateLine(String subjectType) {
         return "物理".equals(subjectType) ? PHYSICS_UNDERGRADUATE_LINE_2025 : HISTORY_UNDERGRADUATE_LINE_2025;
+    }
+
+    private boolean shouldUseQualityJuniorCollege(Integer score, String subjectType, String bucket) {
+        if (score == null || "冲刺".equals(bucket)) {
+            return false;
+        }
+        int line = undergraduateLine(subjectType);
+        return score >= line && score <= line + NEAR_UNDERGRADUATE_MARGIN;
+    }
+
+    public static boolean isHighQualityJuniorCollege(PredictionLine row) {
+        if (row == null || !"专科".equals(row.getSchoolLevel()) || row.getSchoolName() == null) {
+            return false;
+        }
+        for (String keyword : HIGH_QUALITY_JUNIOR_COLLEGE_KEYWORDS) {
+            if (row.getSchoolName().contains(keyword)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private List<PredictionLine> mixHenanRows(List<PredictionLine> all, List<PredictionLine> henan, int preferredHenanCount) {
