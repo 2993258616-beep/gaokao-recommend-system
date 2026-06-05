@@ -10,6 +10,9 @@ const NEAR_UNDERGRADUATE_MARGIN = 20;
 const STATIC_LOGIN_USER = 'admin';
 const STATIC_LOGIN_HASH = '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9';
 const STATIC_LOGIN_KEY = 'gaokao_pages_login_ok';
+const STATIC_LOGIN_FALLBACK_USERS = [
+    { username: STATIC_LOGIN_USER, passwordHash: STATIC_LOGIN_HASH }
+];
 const SCHOOL_PROVINCES = [
     '全部地区', '北京', '天津', '河北', '山西', '内蒙古',
     '辽宁', '吉林', '黑龙江', '上海', '江苏',
@@ -38,6 +41,7 @@ const $ = id => document.getElementById(id);
 let appBooted = false;
 let recommendNonce = 0;
 let lastCriteriaKey = '';
+let staticLoginUsersPromise = null;
 
 setupStaticLogin();
 
@@ -111,9 +115,36 @@ function bootApp() {
 }
 
 async function verifyStaticLogin(username, password) {
-    if (username !== STATIC_LOGIN_USER || !password) return false;
+    if (!username || !password) return false;
     if (!window.crypto || !window.crypto.subtle) return false;
-    return await sha256(password) === STATIC_LOGIN_HASH;
+    const users = await loadStaticLoginUsers();
+    const normalizedUsername = username.trim().toLowerCase();
+    const passwordHash = await sha256(password);
+    return users.some(user => String(user.username || '').trim().toLowerCase() === normalizedUsername
+        && String(user.passwordHash || user.hash || '') === passwordHash);
+}
+
+async function loadStaticLoginUsers() {
+    if (!staticLoginUsersPromise) {
+        staticLoginUsersPromise = fetch('./assets/static-users.json', { cache: 'no-store' })
+            .then(response => response.ok ? response.json() : [])
+            .then(users => Array.isArray(users) ? users : [])
+            .then(users => mergeStaticUsers(STATIC_LOGIN_FALLBACK_USERS, users))
+            .catch(() => STATIC_LOGIN_FALLBACK_USERS);
+    }
+    return staticLoginUsersPromise;
+}
+
+function mergeStaticUsers(baseUsers, extraUsers) {
+    const merged = new Map();
+    baseUsers.concat(extraUsers).forEach(user => {
+        const username = String(user.username || '').trim();
+        const passwordHash = String(user.passwordHash || user.hash || '').trim();
+        if (username && passwordHash) {
+            merged.set(username.toLowerCase(), { username, passwordHash });
+        }
+    });
+    return Array.from(merged.values());
 }
 
 async function sha256(value) {

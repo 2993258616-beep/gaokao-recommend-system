@@ -15,7 +15,7 @@ public class UserRepository {
     }
 
     public Optional<UserAccount> findByUsername(String username) {
-        String sql = "SELECT id, username, password, role, enabled FROM user_account WHERE username = ? LIMIT 1";
+        String sql = "SELECT id, username, password, role, enabled FROM user_account WHERE LOWER(username) = LOWER(?) LIMIT 1";
         return jdbcTemplate.query(sql, new Object[]{username}, rs -> {
             if (!rs.next()) return Optional.empty();
             UserAccount u = new UserAccount();
