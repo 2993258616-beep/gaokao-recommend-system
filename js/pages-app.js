@@ -1,0 +1,315 @@
+let subjectType = '历史';
+let predictionLines = [];
+
+const MAX_VISIBLE_ROWS = 3;
+const QUERY_LIMIT = 18;
+const HISTORY_UNDERGRADUATE_LINE_2025 = 471;
+const PHYSICS_UNDERGRADUATE_LINE_2025 = 427;
+const SCHOOL_PROVINCES = [
+    '全部地区', '北京', '天津', '河北', '山西', '内蒙古',
+    '辽宁', '吉林', '黑龙江', '上海', '江苏',
+    '浙江', '安徽', '福建', '江西', '山东',
+    '河南', '湖北', '湖南', '广东', '广西',
+    '海南', '重庆', '四川', '贵州', '云南',
+    '西藏', '陕西', '甘肃', '青海', '宁夏', '新疆'
+];
+
+const $ = id => document.getElementById(id);
+
+document.querySelectorAll('.subject').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.subject').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        subjectType = btn.dataset.value;
+        renderRecommend();
+    });
+});
+
+$('recommendBtn').addEventListener('click', renderRecommend);
+
+init();
+
+async function init() {
+    renderProvinceOptions();
+    try {
+        const response = await fetch('./assets/prediction-lines.json', { cache: 'no-store' });
+        if (!response.ok) throw new Error('数据文件读取失败');
+        predictionLines = await response.json();
+        renderRecommend();
+    } catch (err) {
+        $('resultArea').innerHTML = `<div class="empty">加载失败：${escapeHtml(err.message)}</div>`;
+    }
+}
+
+function renderProvinceOptions() {
+    $('schoolProvince').innerHTML = SCHOOL_PROVINCES
+        .map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`)
+        .join('');
+}
+
+function renderRecommend() {
+    if (!predictionLines.length) return;
+
+    const score = Number($('score').value || 500);
+    const schoolProvince = $('schoolProvince').value || '全部地区';
+    $('tagSubject').innerText = subjectType + '类';
+    $('tagProvince').innerText = schoolProvince;
+    $('summaryText').innerText = `按历史录取数据参考：河南${subjectType}类，预估 ${score} 分，筛选条件为学校地区：${schoolProvince}。`;
+
+    const rows = recommend(score, subjectType, schoolProvince);
+    $('resultArea').innerHTML = section('rush', '冲', '冲刺推荐', '适合略高于当前分数的院校', rows.rush)
+        + section('stable', '稳', '稳妥推荐', '适合重点考虑的匹配院校', rows.stable)
+        + section('safe', '保', '保底推荐', '适合保底填报的院校', rows.safe);
+}
+
+function recommend(score, subject, schoolProvince) {
+    const limits = henanLimitsByBucket(score, subject, schoolProvince);
+    const rushCandidates = recommendBucket(score, subject, schoolProvince, '冲刺', limits[0]);
+    const stableCandidates = recommendBucket(score, subject, schoolProvince, '稳妥', limits[1]);
+    const safeCandidates = recommendBucket(score, subject, schoolProvince, '保底', limits[2]);
+
+    const used = new Map();
+    return {
+        rush: takeUniqueRows(rushCandidates, used).map(row => polishPrediction(row, score, '冲刺')),
+        stable: takeUniqueRows(stableCandidates, used).map(row => polishPrediction(row, score, '稳妥')),
+        safe: takeUniqueRows(safeCandidates, used).map(row => polishPrediction(row, score, '保底'))
+    };
+}
+
+function recommendBucket(score, subject, schoolProvince, bucket, preferredHenanCount) {
+    const allRegions = !schoolProvince || schoolProvince === '全部地区';
+    const allowUndergraduate = score >= undergraduateLine(subject);
+    const allowJuniorCollege = score < undergraduateLine(subject);
+    const all = queryCandidates(score, subject, schoolProvince, bucket, allowUndergraduate, allowJuniorCollege, QUERY_LIMIT);
+
+    if (!allRegions) return all;
+
+    const henan = queryCandidates(score, subject, '河南', bucket, allowUndergraduate, allowJuniorCollege, Math.max(preferredHenanCount + 2, 3));
+    return mixHenanRows(all, henan, preferredHenanCount);
+}
+
+function queryCandidates(score, subject, schoolProvince, bucket, allowUndergraduate, allowJuniorCollege, limit) {
+    const allRegions = !schoolProvince || schoolProvince === '全部地区';
+    const line = undergraduateLine(subject);
+    const [low, high] = scoreBand(score, bucket, allowUndergraduate, allowJuniorCollege, line);
+
+    return predictionLines
+        .filter(row => row.province === '河南')
+        .filter(row => row.subjectType === subject)
+        .filter(row => allRegions || row.schoolProvince === schoolProvince)
+        .filter(row => row.schoolProvince && row.schoolProvince !== '未识别')
+        .filter(row => row.majorDirection && row.majorDirection.trim() && !row.majorDirection.includes('未提供'))
+        .filter(row => row.majorCategory && row.majorCategory.trim() && !['理', '术', '技', '管理', '商务', '包含', '未提供', '专业', '验技术', '方向'].includes(row.majorCategory))
+        .filter(row => allowUndergraduate || row.schoolLevel !== '本科')
+        .filter(row => allowJuniorCollege || row.schoolLevel !== '专科')
+        .filter(row => !allowUndergraduate || allowJuniorCollege || row.schoolLevel === '本科')
+        .filter(row => allowUndergraduate || !allowJuniorCollege || row.schoolLevel === '专科')
+        .filter(row => {
+            if (!allowUndergraduate && allowJuniorCollege) {
+                return scoreOf(row) <= line + 25 && row.predictScore <= line + 25;
+            }
+            if (allowUndergraduate && !allowJuniorCollege) {
+                return row.predictScore >= line;
+            }
+            return true;
+        })
+        .filter(row => row.predictScore >= low && row.predictScore <= high)
+        .sort((a, b) => compareRows(a, b, score, bucket))
+        .slice(0, Math.max(1, Math.min(limit, 30)));
+}
+
+function scoreBand(score, bucket, allowUndergraduate, allowJuniorCollege, line) {
+    const juniorOnly = !allowUndergraduate && allowJuniorCollege;
+    const undergraduateOnly = allowUndergraduate && !allowJuniorCollege;
+    let low;
+    let high;
+    if (juniorOnly) {
+        const rushWidth = score <= 320 ? 22 : 18;
+        const safeWidth = score <= 320 ? 34 : 28;
+        if (bucket === '冲刺') {
+            low = score + 5;
+            high = score + rushWidth;
+        } else if (bucket === '稳妥') {
+            low = score - 9;
+            high = score + 7;
+        } else {
+            low = score - safeWidth;
+            high = score - 10;
+        }
+        high = Math.min(high, line + 18);
+    } else if (undergraduateOnly) {
+        if (bucket === '冲刺') {
+            low = score + 3;
+            high = score + 18;
+        } else if (bucket === '稳妥') {
+            low = score - 7;
+            high = score + 6;
+        } else {
+            low = score - 23;
+            high = score - 8;
+        }
+        low = Math.max(low, line);
+    } else if (bucket === '冲刺') {
+        low = score + 3;
+        high = score + 18;
+    } else if (bucket === '稳妥') {
+        low = score - 8;
+        high = score + 6;
+    } else {
+        low = score - 26;
+        high = score - 8;
+    }
+    return [Math.max(0, low), Math.min(750, high)];
+}
+
+function compareRows(a, b, score, bucket) {
+    const distance = Math.abs(a.predictScore - score) - Math.abs(b.predictScore - score);
+    if (distance !== 0) return distance;
+    if (bucket === '冲刺') {
+        if (a.predictScore !== b.predictScore) return a.predictScore - b.predictScore;
+    } else {
+        if (a.predictScore !== b.predictScore) return b.predictScore - a.predictScore;
+    }
+    const henanOrder = (isHenan(a) ? 0 : 1) - (isHenan(b) ? 0 : 1);
+    if (henanOrder !== 0) return henanOrder;
+    return scoreOf(b) - scoreOf(a);
+}
+
+function takeUniqueRows(candidates, used) {
+    const rows = [];
+    for (const row of candidates) {
+        const key = rowKey(row);
+        if (used.has(key)) continue;
+        rows.push(row);
+        used.set(key, row);
+        if (rows.length >= MAX_VISIBLE_ROWS) break;
+    }
+    return rows;
+}
+
+function mixHenanRows(all, henan, preferredHenanCount) {
+    const selected = new Map();
+    let henanAdded = 0;
+    for (const row of henan) {
+        if (henanAdded >= preferredHenanCount) break;
+        selected.set(rowKey(row), row);
+        henanAdded++;
+    }
+    for (const row of all) {
+        if (isHenan(row) && henanAdded >= preferredHenanCount && !selected.has(rowKey(row))) continue;
+        if (isHenan(row) && !selected.has(rowKey(row))) henanAdded++;
+        selected.set(rowKey(row), row);
+        if (selected.size >= QUERY_LIMIT) break;
+    }
+    return Array.from(selected.values());
+}
+
+function henanLimitsByBucket(score, subject, schoolProvince) {
+    if (schoolProvince && schoolProvince !== '全部地区') {
+        return [MAX_VISIBLE_ROWS, MAX_VISIBLE_ROWS, MAX_VISIBLE_ROWS];
+    }
+    return rotateHenanLimits(score, subject, [2, 1, 1], [1, 1, 2]);
+}
+
+function rotateHenanLimits(score, subject, first, second) {
+    let seed = score || 0;
+    if (subject === '物理') seed += 17;
+    return seed % 2 === 0 ? first : second;
+}
+
+function polishPrediction(row, score, bucket) {
+    const copy = { ...row };
+    let predicted = copy.predictScore + displayBoost(copy);
+    predicted = clampToBucket(predicted, score, bucket);
+    const band = copy.schoolLevel === '本科' ? 6 : 8;
+    if (copy.schoolLevel === '本科') predicted = Math.max(predicted, undergraduateLine(copy.subjectType) + 2);
+    if (copy.schoolLevel === '专科') predicted = Math.min(predicted, undergraduateLine(copy.subjectType) + 18);
+    copy.predictScore = predicted;
+    copy.predictLow = clamp(predicted - band, 0, 750);
+    copy.predictHigh = clamp(predicted + band, 0, 750);
+    copy.predictRange = `${copy.predictLow}-${copy.predictHigh}`;
+    copy.rangeFloat = predicted - scoreOf(copy);
+    copy.confidence = '按2025线预测2026';
+    return copy;
+}
+
+function displayBoost(row) {
+    const text = [row.schoolName, row.majorGroupFull, row.majorDirection, row.majorCategory].filter(Boolean).join('');
+    let delta = row.schoolLevel === '本科' ? 2 : 1;
+    if (containsAny(text, ['临床医学', '口腔医学', '法学', '汉语言文学', '师范', '计算机', '软件', '人工智能', '大数据', '电子信息', '电气', '自动化', '护理'])) delta += 1;
+    if (isHenan(row)) delta += 1;
+    if (containsAny(text, ['中外合作', '合作办学'])) delta -= 1;
+    return clamp(delta, 0, 4);
+}
+
+function section(type, word, title, desc, rows) {
+    let body = '';
+    if (!rows.length) {
+        body = '<div class="empty">当前筛选条件下暂无数据，可以切换学校地区。</div>';
+    } else {
+        body = `<table class="recommend-table"><thead><tr><th>院校/专业组</th><th>专业</th><th>学校地区</th></tr></thead><tbody>`
+            + rows.map(r => `<tr>
+                <td><div class="school-name">${escapeHtml(r.schoolName)} ${escapeHtml(r.majorGroup || '')}组</div><div class="sub-info">${escapeHtml(r.schoolType || '')} · ${escapeHtml(r.schoolLevel || '')} · 河南考生</div></td>
+                <td class="major-cell">${renderMajorList(r.majorDirection || r.majorCategory || '')}</td>
+                <td>${escapeHtml(r.schoolProvince || '')}</td>
+            </tr>`).join('') + '</tbody></table>';
+    }
+    return `<div class="block ${type}"><div class="block-side"><div class="round">${word}</div><h2>${title}</h2><p>${desc}</p></div><div class="table-wrap">${body}</div></div>`;
+}
+
+function renderMajorList(value) {
+    const text = String(value == null ? '' : value).trim();
+    if (!text) return '';
+    const parts = text.split(/[、,，;；]/).map(v => v.trim()).filter(Boolean);
+    if (parts.length <= 1) return `<span class="major-text">${escapeHtml(text)}</span>`;
+    const visibleParts = parts.slice(0, 3);
+    const suffix = parts.length > 3 ? '<span class="major-chip more">等</span>' : '';
+    return `<div class="major-list">${visibleParts.map(v => `<span class="major-chip">${escapeHtml(v)}</span>`).join('')}${suffix}</div>`;
+}
+
+function undergraduateLine(subject) {
+    return subject === '物理' ? PHYSICS_UNDERGRADUATE_LINE_2025 : HISTORY_UNDERGRADUATE_LINE_2025;
+}
+
+function scoreOf(row) {
+    return Number(row.filingScore || row.predictScore || 0);
+}
+
+function isHenan(row) {
+    return row && row.schoolProvince === '河南';
+}
+
+function rowKey(row) {
+    return `${row.schoolName}|${row.majorGroup}`;
+}
+
+function containsAny(text, words) {
+    return words.some(word => text.includes(word));
+}
+
+function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+}
+
+function clampToBucket(predicted, score, bucket) {
+    let low;
+    let high;
+    if (bucket === '冲刺') {
+        low = score + 3;
+        high = score + 18;
+    } else if (bucket === '稳妥') {
+        low = score - 7;
+        high = score + 6;
+    } else {
+        low = score - 23;
+        high = score - 8;
+    }
+    return clamp(predicted, Math.max(0, low), Math.min(750, high));
+}
+
+function escapeHtml(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
