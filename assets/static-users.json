@@ -38,5 +38,10 @@
     "username": "qwe123",
     "passwordHash": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
     "bcryptHash": "$2a$10$Xw.d0/gif5AZY4HCS/0rmeunn8YEEzQd4nM2cNShFFDzJiYp5Kuyi"
+  },
+  {
+    "username": "ckx123",
+    "passwordHash": "ed6e997596fea8f469cdbcdad8c63926c7398c4e56e97b3f343dd9a211a86fe6",
+    "bcryptHash": "$2a$10$Q0uC4K1.j3nc2M1op2pmne3w1yJbXubfvniC/GG2OTf3UP0.V5lsW"
   }
 ]
