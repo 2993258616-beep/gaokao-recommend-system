@@ -221,8 +221,16 @@ function recommend(score, subject, schoolProvince) {
 
     const used = new Map();
     const rushRows = takeUniqueRows(varyCandidateOrder(rushCandidates, score, subject, schoolProvince, '冲刺'), used);
-    const stableRows = takeUniqueRows(varyCandidateOrder(stableCandidates, score, subject, schoolProvince, '稳妥'), used);
-    const safeRows = takeUniqueRows(varyCandidateOrder(safeCandidates, score, subject, schoolProvince, '保底'), used);
+    const allRegions = !schoolProvince || schoolProvince === '全部地区';
+    let stableRows;
+    let safeRows;
+    if (allRegions) {
+        stableRows = takeUniqueRows(varyCandidateOrder(stableCandidates, score, subject, schoolProvince, '稳妥'), used);
+        safeRows = takeUniqueRows(varyCandidateOrder(safeCandidates, score, subject, schoolProvince, '保底'), used);
+    } else {
+        safeRows = takeUniqueRows(varyCandidateOrder(safeCandidates, score, subject, schoolProvince, '保底'), used);
+        stableRows = takeUniqueRows(varyCandidateOrder(stableCandidates, score, subject, schoolProvince, '稳妥'), used);
+    }
 
     return {
         rush: rushRows.map(row => polishPrediction(row, score, '冲刺')),
@@ -243,7 +251,15 @@ function recommendBucket(score, subject, schoolProvince, bucket, preferredHenanC
         if (bucket !== '保底' || all.length >= MAX_VISIBLE_ROWS) return all;
         const expanded = queryCandidatesWithFallback(score, subject, schoolProvince, '保底扩展', allowUndergraduate,
             allowJuniorCollege, nearLineJuniorCollege, QUERY_LIMIT);
-        return mergeFallbackRows(all, expanded, QUERY_LIMIT);
+        const merged = mergeFallbackRows(all, expanded, QUERY_LIMIT);
+        if (merged.length >= MAX_VISIBLE_ROWS) return merged;
+        const reserve = queryCandidatesWithFallback(score, subject, schoolProvince, '保底兜底', allowUndergraduate,
+            allowJuniorCollege, nearLineJuniorCollege, QUERY_LIMIT);
+        const reserved = mergeFallbackRows(merged, reserve, QUERY_LIMIT);
+        if (reserved.length >= MAX_VISIBLE_ROWS) return reserved;
+        const provincialReserve = queryCandidatesWithFallback(score, subject, schoolProvince, '保底同省补足',
+            allowUndergraduate, allowJuniorCollege, nearLineJuniorCollege, QUERY_LIMIT);
+        return mergeFallbackRows(reserved, provincialReserve, QUERY_LIMIT);
     }
 
     const henan = queryCandidatesWithFallback(score, subject, '河南', bucket, allowUndergraduate,
@@ -329,6 +345,12 @@ function scoreBand(score, bucket, allowUndergraduate, allowJuniorCollege, line) 
         } else if (bucket === '保底扩展') {
             low = score - Math.max(42, safeWidth + 12);
             high = score - 6;
+        } else if (bucket === '保底兜底') {
+            low = score - Math.max(70, safeWidth + 35);
+            high = score - 5;
+        } else if (bucket === '保底同省补足') {
+            low = score - Math.max(85, safeWidth + 50);
+            high = score + 4;
         } else {
             low = score - safeWidth;
             high = score - 10;
@@ -344,6 +366,12 @@ function scoreBand(score, bucket, allowUndergraduate, allowJuniorCollege, line) 
         } else if (bucket === '保底扩展') {
             low = score - 55;
             high = score - 6;
+        } else if (bucket === '保底兜底') {
+            low = line;
+            high = score - 6;
+        } else if (bucket === '保底同省补足') {
+            low = line;
+            high = score + 2;
         } else {
             low = score - 23;
             high = score - 10;
@@ -358,6 +386,12 @@ function scoreBand(score, bucket, allowUndergraduate, allowJuniorCollege, line) 
     } else if (bucket === '保底扩展') {
         low = score - 55;
         high = score - 6;
+    } else if (bucket === '保底兜底') {
+        low = score - 90;
+        high = score - 6;
+    } else if (bucket === '保底同省补足') {
+        low = score - 100;
+        high = score + 2;
     } else {
         low = score - 26;
         high = score - 10;
