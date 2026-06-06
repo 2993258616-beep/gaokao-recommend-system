@@ -231,6 +231,7 @@ function recommend(score, subject, schoolProvince) {
         safeRows = takeUniqueRows(varyCandidateOrder(safeCandidates, score, subject, schoolProvince, '保底'), used);
         stableRows = takeUniqueRows(varyCandidateOrder(stableCandidates, score, subject, schoolProvince, '稳妥'), used);
     }
+    rebalanceScarceHighScoreRows(score, subject, rushRows, stableRows, safeRows);
 
     return {
         rush: rushRows.map(row => polishPrediction(row, score, '冲刺')),
@@ -248,6 +249,11 @@ function recommendBucket(score, subject, schoolProvince, bucket, preferredHenanC
         allowJuniorCollege, nearLineJuniorCollege, QUERY_LIMIT);
 
     if (!allRegions) {
+        if (bucket === '冲刺' && all.length < MAX_VISIBLE_ROWS && allowUndergraduate && !allowJuniorCollege) {
+            const highScoreReserve = queryCandidatesWithFallback(score, subject, schoolProvince, '冲刺高分兜底',
+                allowUndergraduate, allowJuniorCollege, nearLineJuniorCollege, QUERY_LIMIT);
+            return mergeFallbackRows(all, highScoreReserve, QUERY_LIMIT);
+        }
         if (bucket !== '保底' || all.length >= MAX_VISIBLE_ROWS) return all;
         const expanded = queryCandidatesWithFallback(score, subject, schoolProvince, '保底扩展', allowUndergraduate,
             allowJuniorCollege, nearLineJuniorCollege, QUERY_LIMIT);
@@ -262,9 +268,35 @@ function recommendBucket(score, subject, schoolProvince, bucket, preferredHenanC
         return mergeFallbackRows(reserved, provincialReserve, QUERY_LIMIT);
     }
 
-    const henan = queryCandidatesWithFallback(score, subject, '河南', bucket, allowUndergraduate,
+    let pool = all;
+    if (bucket === '冲刺' && pool.length < MAX_VISIBLE_ROWS && allowUndergraduate && !allowJuniorCollege) {
+        const highScoreReserve = queryCandidatesWithFallback(score, subject, schoolProvince, '冲刺高分兜底',
+            allowUndergraduate, allowJuniorCollege, nearLineJuniorCollege, QUERY_LIMIT);
+        pool = mergeFallbackRows(pool, highScoreReserve, QUERY_LIMIT);
+    }
+    if (bucket === '保底' && pool.length < MAX_VISIBLE_ROWS) {
+        const expanded = queryCandidatesWithFallback(score, subject, schoolProvince, '保底扩展',
+            allowUndergraduate, allowJuniorCollege, nearLineJuniorCollege, QUERY_LIMIT);
+        pool = mergeFallbackRows(pool, expanded, QUERY_LIMIT);
+        if (pool.length < MAX_VISIBLE_ROWS) {
+            const reserve = queryCandidatesWithFallback(score, subject, schoolProvince, '保底兜底',
+                allowUndergraduate, allowJuniorCollege, nearLineJuniorCollege, QUERY_LIMIT);
+            pool = mergeFallbackRows(pool, reserve, QUERY_LIMIT);
+        }
+        if (pool.length < MAX_VISIBLE_ROWS) {
+            const provincialReserve = queryCandidatesWithFallback(score, subject, schoolProvince, '保底同省补足',
+                allowUndergraduate, allowJuniorCollege, nearLineJuniorCollege, QUERY_LIMIT);
+            pool = mergeFallbackRows(pool, provincialReserve, QUERY_LIMIT);
+        }
+    }
+    let henan = queryCandidatesWithFallback(score, subject, '河南', bucket, allowUndergraduate,
         allowJuniorCollege, nearLineJuniorCollege, Math.max(preferredHenanCount + 2, 3));
-    return mixHenanRows(all, henan, preferredHenanCount);
+    if (bucket === '冲刺' && henan.length < preferredHenanCount && allowUndergraduate && !allowJuniorCollege) {
+        const henanReserve = queryCandidatesWithFallback(score, subject, '河南', '冲刺高分兜底',
+            allowUndergraduate, allowJuniorCollege, nearLineJuniorCollege, Math.max(preferredHenanCount + 2, 3));
+        henan = mergeFallbackRows(henan, henanReserve, Math.max(preferredHenanCount + 2, 3));
+    }
+    return mixHenanRows(pool, henan, preferredHenanCount);
 }
 
 function mergeFallbackRows(primary, fallback, limit) {
@@ -274,6 +306,20 @@ function mergeFallbackRows(primary, fallback, limit) {
         if (merged.size >= limit) break;
     }
     return Array.from(merged.values());
+}
+
+function rebalanceScarceHighScoreRows(score, subject, rushRows, stableRows, safeRows) {
+    if (!score || score < 680 || score < undergraduateLine(subject) + 100) return;
+    if (!stableRows.length && rushRows.length > 1) {
+        stableRows.push(rushRows.pop());
+    }
+    if (!safeRows.length) {
+        if (stableRows.length > 1) {
+            safeRows.push(stableRows.pop());
+        } else if (rushRows.length > 2) {
+            safeRows.push(rushRows.pop());
+        }
+    }
 }
 
 function queryCandidatesWithFallback(score, subject, schoolProvince, bucket, allowUndergraduate, allowJuniorCollege, preferQualityJuniorCollege, limit) {
@@ -339,6 +385,9 @@ function scoreBand(score, bucket, allowUndergraduate, allowJuniorCollege, line) 
         if (bucket === '冲刺') {
             low = score + 5;
             high = score + rushWidth;
+        } else if (bucket === '冲刺高分兜底') {
+            low = score + 3;
+            high = score + rushWidth;
         } else if (bucket === '稳妥') {
             low = score - 9;
             high = score + 4;
@@ -360,6 +409,10 @@ function scoreBand(score, bucket, allowUndergraduate, allowJuniorCollege, line) 
         if (bucket === '冲刺') {
             low = score + 3;
             high = score + 18;
+        } else if (bucket === '冲刺高分兜底') {
+            const fallbackWidth = score >= 680 ? 80 : (score >= 620 ? 55 : 35);
+            low = score - fallbackWidth;
+            high = 750;
         } else if (bucket === '稳妥') {
             low = score - 9;
             high = score + 2;
@@ -380,6 +433,10 @@ function scoreBand(score, bucket, allowUndergraduate, allowJuniorCollege, line) 
     } else if (bucket === '冲刺') {
         low = score + 3;
         high = score + 18;
+    } else if (bucket === '冲刺高分兜底') {
+        const fallbackWidth = score >= 680 ? 80 : (score >= 620 ? 55 : 35);
+        low = score - fallbackWidth;
+        high = 750;
     } else if (bucket === '稳妥') {
         low = score - 9;
         high = score + 2;
@@ -466,7 +523,23 @@ function henanLimitsByBucket(score, subject, schoolProvince) {
     if (schoolProvince && schoolProvince !== '全部地区') {
         return [MAX_VISIBLE_ROWS, MAX_VISIBLE_ROWS, MAX_VISIBLE_ROWS];
     }
+    const totalLimit = totalHenanLimit(score);
+    if (totalLimit <= 0) return [0, 0, 0];
+    if (totalLimit === 1) return rotateHenanLimits(score, subject, [1, 0, 0], [0, 0, 1]);
+    if (totalLimit === 2) return rotateHenanLimits(score, subject, [1, 1, 0], [1, 0, 1]);
+    if (totalLimit === 3) return [1, 1, 1];
+    if (totalLimit >= 6) return [2, 1, 3];
+    if (totalLimit === 5) return rotateHenanLimits(score, subject, [2, 1, 2], [3, 1, 1]);
     return rotateHenanLimits(score, subject, [2, 1, 1], [1, 1, 2]);
+}
+
+function totalHenanLimit(score) {
+    if (!score) return 4;
+    if (score >= 680) return 0;
+    if (score >= 620) return 1;
+    if (score <= 300) return 6;
+    if (score <= 380) return 5;
+    return 4;
 }
 
 function rotateHenanLimits(score, subject, first, second) {
