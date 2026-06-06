@@ -14,7 +14,8 @@
   },
   {
     "username": "h040522",
-    "bcryptHash": "$2a$10$CnViDwU44HBUQizpkquaEe.htqDuRK.zK2HkImNQTapArvpotkdbe"
+    "passwordHash": "0670cd7bd6012520ea136d88e51bbd0bd8ca6b12d6db11887488bd7da16d5699",
+    "bcryptHash": "$2a$10$BvodGOaE9W0gO1evplnrt.eVm.T4UBTnhVXTZ7L7eq8rIsb3PxY5y"
   },
   {
     "username": "wst123",
@@ -44,5 +45,10 @@
     "username": "ckx123",
     "passwordHash": "ed6e997596fea8f469cdbcdad8c63926c7398c4e56e97b3f343dd9a211a86fe6",
     "bcryptHash": "$2a$10$Q0uC4K1.j3nc2M1op2pmne3w1yJbXubfvniC/GG2OTf3UP0.V5lsW"
+  },
+  {
+    "username": "lyz123",
+    "passwordHash": "ed6e997596fea8f469cdbcdad8c63926c7398c4e56e97b3f343dd9a211a86fe6",
+    "bcryptHash": "$2a$10$zaLjsYCELpypu.GwPUeJYee5ffLNlk07upPoAVgOSJqC8X153NNCy"
   }
 ]
