@@ -65,6 +65,9 @@ $('recommendBtn').addEventListener('click', () => {
     renderRecommend();
 });
 
+$('schoolProvince').addEventListener('change', resetPlanAndRender);
+$('score').addEventListener('change', resetPlanAndRender);
+
 function setupStaticLogin() {
     const loginView = $('loginView');
     const appView = $('appView');
@@ -217,10 +220,14 @@ function recommend(score, subject, schoolProvince) {
     const safeCandidates = recommendBucket(score, subject, schoolProvince, '保底', limits[2]);
 
     const used = new Map();
+    const rushRows = takeUniqueRows(varyCandidateOrder(rushCandidates, score, subject, schoolProvince, '冲刺'), used);
+    const stableRows = takeUniqueRows(varyCandidateOrder(stableCandidates, score, subject, schoolProvince, '稳妥'), used);
+    const safeRows = takeUniqueRows(varyCandidateOrder(safeCandidates, score, subject, schoolProvince, '保底'), used);
+
     return {
-        rush: takeUniqueRows(varyCandidateOrder(rushCandidates, score, subject, schoolProvince, '冲刺'), used).map(row => polishPrediction(row, score, '冲刺')),
-        stable: takeUniqueRows(varyCandidateOrder(stableCandidates, score, subject, schoolProvince, '稳妥'), used).map(row => polishPrediction(row, score, '稳妥')),
-        safe: takeUniqueRows(varyCandidateOrder(safeCandidates, score, subject, schoolProvince, '保底'), used).map(row => polishPrediction(row, score, '保底'))
+        rush: rushRows.map(row => polishPrediction(row, score, '冲刺')),
+        stable: stableRows.map(row => polishPrediction(row, score, '稳妥')),
+        safe: safeRows.map(row => polishPrediction(row, score, '保底'))
     };
 }
 
@@ -304,7 +311,7 @@ function scoreBand(score, bucket, allowUndergraduate, allowJuniorCollege, line) 
             high = score + rushWidth;
         } else if (bucket === '稳妥') {
             low = score - 9;
-            high = score + 7;
+            high = score + 4;
         } else {
             low = score - safeWidth;
             high = score - 10;
@@ -315,22 +322,22 @@ function scoreBand(score, bucket, allowUndergraduate, allowJuniorCollege, line) 
             low = score + 3;
             high = score + 18;
         } else if (bucket === '稳妥') {
-            low = score - 7;
-            high = score + 6;
+            low = score - 9;
+            high = score + 2;
         } else {
             low = score - 23;
-            high = score - 8;
+            high = score - 10;
         }
         low = Math.max(low, line);
     } else if (bucket === '冲刺') {
         low = score + 3;
         high = score + 18;
     } else if (bucket === '稳妥') {
-        low = score - 8;
-        high = score + 6;
+        low = score - 9;
+        high = score + 2;
     } else {
         low = score - 26;
-        high = score - 8;
+        high = score - 10;
     }
     return [Math.max(0, low), Math.min(750, high)];
 }
@@ -517,11 +524,11 @@ function clampToBucket(predicted, score, bucket) {
         low = score + 3;
         high = score + 18;
     } else if (bucket === '稳妥') {
-        low = score - 7;
-        high = score + 6;
+        low = score - 9;
+        high = score + 2;
     } else {
         low = score - 23;
-        high = score - 8;
+        high = score - 10;
     }
     return clamp(predicted, Math.max(0, low), Math.min(750, high));
 }
