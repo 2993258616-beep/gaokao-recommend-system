@@ -239,11 +239,25 @@ function recommendBucket(score, subject, schoolProvince, bucket, preferredHenanC
     const all = queryCandidatesWithFallback(score, subject, schoolProvince, bucket, allowUndergraduate,
         allowJuniorCollege, nearLineJuniorCollege, QUERY_LIMIT);
 
-    if (!allRegions) return all;
+    if (!allRegions) {
+        if (bucket !== '保底' || all.length >= MAX_VISIBLE_ROWS) return all;
+        const expanded = queryCandidatesWithFallback(score, subject, schoolProvince, '保底扩展', allowUndergraduate,
+            allowJuniorCollege, nearLineJuniorCollege, QUERY_LIMIT);
+        return mergeFallbackRows(all, expanded, QUERY_LIMIT);
+    }
 
     const henan = queryCandidatesWithFallback(score, subject, '河南', bucket, allowUndergraduate,
         allowJuniorCollege, nearLineJuniorCollege, Math.max(preferredHenanCount + 2, 3));
     return mixHenanRows(all, henan, preferredHenanCount);
+}
+
+function mergeFallbackRows(primary, fallback, limit) {
+    const merged = new Map(primary.map(row => [rowKey(row), row]));
+    for (const row of fallback) {
+        merged.set(rowKey(row), row);
+        if (merged.size >= limit) break;
+    }
+    return Array.from(merged.values());
 }
 
 function queryCandidatesWithFallback(score, subject, schoolProvince, bucket, allowUndergraduate, allowJuniorCollege, preferQualityJuniorCollege, limit) {
@@ -312,6 +326,9 @@ function scoreBand(score, bucket, allowUndergraduate, allowJuniorCollege, line) 
         } else if (bucket === '稳妥') {
             low = score - 9;
             high = score + 4;
+        } else if (bucket === '保底扩展') {
+            low = score - Math.max(42, safeWidth + 12);
+            high = score - 6;
         } else {
             low = score - safeWidth;
             high = score - 10;
@@ -324,6 +341,9 @@ function scoreBand(score, bucket, allowUndergraduate, allowJuniorCollege, line) 
         } else if (bucket === '稳妥') {
             low = score - 9;
             high = score + 2;
+        } else if (bucket === '保底扩展') {
+            low = score - 55;
+            high = score - 6;
         } else {
             low = score - 23;
             high = score - 10;
@@ -335,6 +355,9 @@ function scoreBand(score, bucket, allowUndergraduate, allowJuniorCollege, line) 
     } else if (bucket === '稳妥') {
         low = score - 9;
         high = score + 2;
+    } else if (bucket === '保底扩展') {
+        low = score - 55;
+        high = score - 6;
     } else {
         low = score - 26;
         high = score - 10;
