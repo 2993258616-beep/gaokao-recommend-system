@@ -254,6 +254,11 @@ function recommendBucket(score, subject, schoolProvince, bucket, preferredHenanC
                 allowUndergraduate, allowJuniorCollege, nearLineJuniorCollege, QUERY_LIMIT);
             return mergeFallbackRows(all, highScoreReserve, QUERY_LIMIT);
         }
+        if (bucket === '稳妥' && all.length < MAX_VISIBLE_ROWS) {
+            const expanded = queryCandidatesWithFallback(score, subject, schoolProvince, '稳妥地区补足',
+                allowUndergraduate, allowJuniorCollege, nearLineJuniorCollege, QUERY_LIMIT);
+            return mergeFallbackRows(all, expanded, QUERY_LIMIT);
+        }
         if (bucket !== '保底' || all.length >= MAX_VISIBLE_ROWS) return all;
         const expanded = queryCandidatesWithFallback(score, subject, schoolProvince, '保底扩展', allowUndergraduate,
             allowJuniorCollege, nearLineJuniorCollege, QUERY_LIMIT);
@@ -391,6 +396,9 @@ function scoreBand(score, bucket, allowUndergraduate, allowJuniorCollege, line) 
         } else if (bucket === '稳妥') {
             low = score - 9;
             high = score + 4;
+        } else if (bucket === '稳妥地区补足') {
+            low = score - 18;
+            high = score + 12;
         } else if (bucket === '保底扩展') {
             low = score - Math.max(42, safeWidth + 12);
             high = score - 6;
@@ -416,6 +424,9 @@ function scoreBand(score, bucket, allowUndergraduate, allowJuniorCollege, line) 
         } else if (bucket === '稳妥') {
             low = score - 9;
             high = score + 2;
+        } else if (bucket === '稳妥地区补足') {
+            low = score - 20;
+            high = score + 12;
         } else if (bucket === '保底扩展') {
             low = score - 55;
             high = score - 6;
@@ -440,6 +451,9 @@ function scoreBand(score, bucket, allowUndergraduate, allowJuniorCollege, line) 
     } else if (bucket === '稳妥') {
         low = score - 9;
         high = score + 2;
+    } else if (bucket === '稳妥地区补足') {
+        low = score - 20;
+        high = score + 12;
     } else if (bucket === '保底扩展') {
         low = score - 55;
         high = score - 6;
