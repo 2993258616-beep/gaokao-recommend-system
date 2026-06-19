@@ -55,8 +55,13 @@ document.querySelectorAll('.subject').forEach(btn => {
 });
 
 $('recommendBtn').addEventListener('click', () => {
-    recommendNonce = 0;
-    lastCriteriaKey = getCurrentCriteriaKey();
+    const criteriaKey = getCurrentCriteriaKey();
+    if (criteriaKey === lastCriteriaKey) {
+        recommendNonce = (recommendNonce + 1) % PLAN_COUNT;
+    } else {
+        recommendNonce = 0;
+        lastCriteriaKey = criteriaKey;
+    }
     renderRecommend();
 });
 
@@ -161,7 +166,7 @@ async function sha256(value) {
 async function init() {
     renderProvinceOptions();
     try {
-        const response = await fetch('./assets/prediction-lines.json?v=2026061903', { cache: 'no-store' });
+        const response = await fetch('./assets/prediction-lines.json?v=2026062001', { cache: 'no-store' });
         if (!response.ok) throw new Error('数据文件读取失败');
         predictionLines = await response.json();
         resetPlanAndRender();
@@ -200,7 +205,7 @@ function renderRecommend() {
     }
     $('tagSubject').innerText = subjectType + '类';
     $('tagProvince').innerText = schoolProvince;
-    $('summaryText').innerText = `按历史录取数据参考：河南${subjectType}类，预估 ${score} 分，筛选条件为学校地区：${schoolProvince}。`;
+    $('summaryText').innerText = `按历史录取数据参考：河南${subjectType}类，预估 ${score} 分，筛选条件为学校地区：${schoolProvince}，第 ${recommendNonce + 1} 批。`;
 
     const rows = recommend(score, subjectType, schoolProvince);
     $('resultArea').innerHTML = section('rush', '冲', '冲刺推荐', '适合略高于当前分数的院校', rows.rush)
