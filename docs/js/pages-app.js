@@ -161,7 +161,7 @@ async function sha256(value) {
 async function init() {
     renderProvinceOptions();
     try {
-        const response = await fetch('./assets/prediction-lines.json', { cache: 'no-store' });
+        const response = await fetch('./assets/prediction-lines.json?v=2026061903', { cache: 'no-store' });
         if (!response.ok) throw new Error('数据文件读取失败');
         predictionLines = await response.json();
         resetPlanAndRender();
