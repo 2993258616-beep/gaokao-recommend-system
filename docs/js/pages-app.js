@@ -55,13 +55,8 @@ document.querySelectorAll('.subject').forEach(btn => {
 });
 
 $('recommendBtn').addEventListener('click', () => {
-    const criteriaKey = getCurrentCriteriaKey();
-    if (criteriaKey === lastCriteriaKey) {
-        recommendNonce = (recommendNonce + 1) % PLAN_COUNT;
-    } else {
-        recommendNonce = 0;
-        lastCriteriaKey = criteriaKey;
-    }
+    recommendNonce = 0;
+    lastCriteriaKey = getCurrentCriteriaKey();
     renderRecommend();
 });
 
@@ -228,15 +223,18 @@ function recommend(score, subject, schoolProvince) {
         stableRows = takeUniqueRows(varyCandidateOrder(stableCandidates, score, subject, schoolProvince, '稳妥'), used);
         safeRows = takeUniqueRows(varyCandidateOrder(safeCandidates, score, subject, schoolProvince, '保底'), used);
     } else {
-        safeRows = takeUniqueRows(varyCandidateOrder(safeCandidates, score, subject, schoolProvince, '保底'), used);
         stableRows = takeUniqueRows(varyCandidateOrder(stableCandidates, score, subject, schoolProvince, '稳妥'), used);
+        safeRows = takeUniqueRows(varyCandidateOrder(safeCandidates, score, subject, schoolProvince, '保底'), used);
     }
     rebalanceScarceHighScoreRows(score, subject, rushRows, stableRows, safeRows);
+    const canonicalRows = canonicalizeRows(score, rushRows, stableRows, safeRows,
+        rushCandidates, stableCandidates, safeCandidates);
+    if (allRegions) enforceHenanFirstPageRows(canonicalRows, score, subject);
 
     return {
-        rush: rushRows.map(row => polishPrediction(row, score, '冲刺')),
-        stable: stableRows.map(row => polishPrediction(row, score, '稳妥')),
-        safe: safeRows.map(row => polishPrediction(row, score, '保底'))
+        rush: canonicalRows.rush.map(row => polishPrediction(row, score, '冲刺')),
+        stable: canonicalRows.stable.map(row => polishPrediction(row, score, '稳妥')),
+        safe: canonicalRows.safe.map(row => polishPrediction(row, score, '保底'))
     };
 }
 
@@ -253,11 +251,6 @@ function recommendBucket(score, subject, schoolProvince, bucket, preferredHenanC
             const highScoreReserve = queryCandidatesWithFallback(score, subject, schoolProvince, '冲刺高分兜底',
                 allowUndergraduate, allowJuniorCollege, nearLineJuniorCollege, QUERY_LIMIT);
             return mergeFallbackRows(all, highScoreReserve, QUERY_LIMIT);
-        }
-        if (bucket === '稳妥' && all.length < MAX_VISIBLE_ROWS) {
-            const expanded = queryCandidatesWithFallback(score, subject, schoolProvince, '稳妥地区补足',
-                allowUndergraduate, allowJuniorCollege, nearLineJuniorCollege, QUERY_LIMIT);
-            return mergeFallbackRows(all, expanded, QUERY_LIMIT);
         }
         if (bucket !== '保底' || all.length >= MAX_VISIBLE_ROWS) return all;
         const expanded = queryCandidatesWithFallback(score, subject, schoolProvince, '保底扩展', allowUndergraduate,
@@ -323,6 +316,81 @@ function rebalanceScarceHighScoreRows(score, subject, rushRows, stableRows, safe
             safeRows.push(stableRows.pop());
         } else if (rushRows.length > 2) {
             safeRows.push(rushRows.pop());
+        }
+    }
+}
+
+function canonicalizeRows(score, ...sources) {
+    const result = { rush: [], stable: [], safe: [] };
+    const used = new Set();
+    for (const source of sources) {
+        if (!source) continue;
+        for (const row of source) {
+            if (!row) continue;
+            const key = rowKey(row);
+            if (used.has(key)) continue;
+            const bucket = canonicalBucket(row, score);
+            if (result[bucket].length >= MAX_VISIBLE_ROWS) continue;
+            result[bucket].push(row);
+            used.add(key);
+        }
+    }
+    rebalanceEmptyCanonicalRows(result);
+    fillCanonicalRows(result, score, sources);
+    return result;
+}
+
+function canonicalBucket(row, score) {
+    const predicted = Number(row.predictScore || 0);
+    const diff = predicted - Number(score || 0);
+    if (diff >= 3) return 'rush';
+    if (diff >= -9) return 'stable';
+    return 'safe';
+}
+
+function rebalanceEmptyCanonicalRows(rows) {
+    if (!rows.stable.length) {
+        if (!moveEdgeRow(rows.rush, rows.stable, false)) moveEdgeRow(rows.safe, rows.stable, true);
+    }
+    if (!rows.rush.length) {
+        if (!moveEdgeRow(rows.stable, rows.rush, true)) moveEdgeRow(rows.safe, rows.rush, true);
+    }
+    if (!rows.safe.length) {
+        if (!moveEdgeRow(rows.stable, rows.safe, false)) moveEdgeRow(rows.rush, rows.safe, false);
+    }
+}
+
+function moveEdgeRow(fromRows, toRows, highest) {
+    if (!fromRows || fromRows.length <= 1 || !toRows || toRows.length) return false;
+    let selectedIndex = 0;
+    let selectedScore = Number(fromRows[0].predictScore || 0);
+    for (let i = 1; i < fromRows.length; i++) {
+        const currentScore = Number(fromRows[i].predictScore || 0);
+        if ((highest && currentScore > selectedScore) || (!highest && currentScore < selectedScore)) {
+            selectedScore = currentScore;
+            selectedIndex = i;
+        }
+    }
+    toRows.push(fromRows.splice(selectedIndex, 1)[0]);
+    return true;
+}
+
+function fillCanonicalRows(result, score, sources) {
+    const used = new Set([...result.rush, ...result.stable, ...result.safe].map(rowKey));
+    fillCanonicalBucket(result.rush, 'rush', score, used, sources);
+    fillCanonicalBucket(result.stable, 'stable', score, used, sources);
+    fillCanonicalBucket(result.safe, 'safe', score, used, sources);
+}
+
+function fillCanonicalBucket(rows, bucket, score, used, sources) {
+    for (const source of sources) {
+        if (!source) continue;
+        for (const row of source) {
+            if (!row || rows.length >= MAX_VISIBLE_ROWS) return;
+            const key = rowKey(row);
+            if (used.has(key) || canonicalBucket(row, score) !== bucket) continue;
+            rows.push(row);
+            used.add(key);
         }
     }
 }
@@ -396,9 +464,6 @@ function scoreBand(score, bucket, allowUndergraduate, allowJuniorCollege, line) 
         } else if (bucket === '稳妥') {
             low = score - 9;
             high = score + 4;
-        } else if (bucket === '稳妥地区补足') {
-            low = score - 18;
-            high = score + 12;
         } else if (bucket === '保底扩展') {
             low = score - Math.max(42, safeWidth + 12);
             high = score - 6;
@@ -424,9 +489,6 @@ function scoreBand(score, bucket, allowUndergraduate, allowJuniorCollege, line) 
         } else if (bucket === '稳妥') {
             low = score - 9;
             high = score + 2;
-        } else if (bucket === '稳妥地区补足') {
-            low = score - 20;
-            high = score + 12;
         } else if (bucket === '保底扩展') {
             low = score - 55;
             high = score - 6;
@@ -451,9 +513,6 @@ function scoreBand(score, bucket, allowUndergraduate, allowJuniorCollege, line) 
     } else if (bucket === '稳妥') {
         low = score - 9;
         high = score + 2;
-    } else if (bucket === '稳妥地区补足') {
-        low = score - 20;
-        high = score + 12;
     } else if (bucket === '保底扩展') {
         low = score - 55;
         high = score - 6;
@@ -537,29 +596,80 @@ function henanLimitsByBucket(score, subject, schoolProvince) {
     if (schoolProvince && schoolProvince !== '全部地区') {
         return [MAX_VISIBLE_ROWS, MAX_VISIBLE_ROWS, MAX_VISIBLE_ROWS];
     }
-    const totalLimit = totalHenanLimit(score);
-    if (totalLimit <= 0) return [0, 0, 0];
-    if (totalLimit === 1) return rotateHenanLimits(score, subject, [1, 0, 0], [0, 0, 1]);
-    if (totalLimit === 2) return rotateHenanLimits(score, subject, [1, 1, 0], [1, 0, 1]);
+    const totalLimit = clamp(totalHenanLimit(score, subject), 1, 4);
+    if (totalLimit === 1) return rotateHenanLimits(score, subject, [1, 0, 0], [0, 1, 0], [0, 0, 1]);
+    if (totalLimit === 2) return rotateHenanLimits(score, subject, [1, 1, 0], [1, 0, 1], [0, 1, 1]);
     if (totalLimit === 3) return [1, 1, 1];
-    if (totalLimit >= 6) return [2, 1, 3];
-    if (totalLimit === 5) return rotateHenanLimits(score, subject, [2, 1, 2], [3, 1, 1]);
-    return rotateHenanLimits(score, subject, [2, 1, 1], [1, 1, 2]);
+    return rotateHenanLimits(score, subject, [2, 1, 1], [1, 2, 1], [1, 1, 2]);
 }
 
-function totalHenanLimit(score) {
+function totalHenanLimit(score, subject) {
     if (!score) return 4;
-    if (score >= 680) return 0;
     if (score >= 620) return 1;
-    if (score <= 300) return 6;
-    if (score <= 380) return 5;
+    if (score >= 560) return 2;
+    if (score >= undergraduateLine(subject)) return 3;
     return 4;
 }
 
-function rotateHenanLimits(score, subject, first, second) {
+function rotateHenanLimits(score, subject, ...plans) {
     let seed = score || 0;
     if (subject === '物理') seed += 17;
-    return seed % 2 === 0 ? first : second;
+    return plans[((seed % plans.length) + plans.length) % plans.length];
+}
+
+function rotatedHenanBuckets(score, subject) {
+    const buckets = ['冲刺', '稳妥', '保底'];
+    let seed = score || 0;
+    if (subject === '物理') seed += 17;
+    const offset = ((seed % buckets.length) + buckets.length) % buckets.length;
+    return buckets.slice(offset).concat(buckets.slice(0, offset));
+}
+
+function enforceHenanFirstPageRows(rows, score, subject) {
+    trimHenanFirstPageRows(rows);
+    if (countHenanFirstPageRows(rows) >= 1) return;
+    const used = new Set([...rows.rush, ...rows.stable, ...rows.safe].map(rowKey));
+    for (const bucket of rotatedHenanBuckets(score, subject)) {
+        const nearLineJuniorCollege = shouldUseQualityJuniorCollege(score, subject, bucket);
+        const allowUndergraduate = score >= undergraduateLine(subject) && !nearLineJuniorCollege;
+        const allowJuniorCollege = score < undergraduateLine(subject) || nearLineJuniorCollege;
+        const candidates = recommendBucket(score, subject, '河南', bucket, MAX_VISIBLE_ROWS);
+        for (const row of candidates) {
+            if (!row || !isHenan(row) || used.has(rowKey(row))) continue;
+            const target = rows[canonicalBucket(row, score)];
+            if (addOrReplaceHenanRow(target, row)) return;
+        }
+    }
+}
+
+function trimHenanFirstPageRows(rows) {
+    let count = countHenanFirstPageRows(rows);
+    if (count <= 4) return;
+    for (const bucket of ['safe', 'stable', 'rush']) {
+        for (let i = rows[bucket].length - 1; i >= 0 && count > 4; i--) {
+            if (!isHenan(rows[bucket][i])) continue;
+            rows[bucket].splice(i, 1);
+            count--;
+        }
+    }
+}
+
+function countHenanFirstPageRows(rows) {
+    return [...rows.rush, ...rows.stable, ...rows.safe].filter(isHenan).length;
+}
+
+function addOrReplaceHenanRow(rows, candidate) {
+    if (!rows || !candidate) return false;
+    if (rows.length < MAX_VISIBLE_ROWS) {
+        rows.push(candidate);
+        return true;
+    }
+    for (let i = rows.length - 1; i >= 0; i--) {
+        if (isHenan(rows[i])) continue;
+        rows[i] = candidate;
+        return true;
+    }
+    return false;
 }
 
 function polishPrediction(row, score, bucket) {
@@ -650,7 +760,7 @@ function isHighQualityJuniorCollege(row) {
 }
 
 function rowKey(row) {
-    return `${row.schoolName}|${row.majorGroup}`;
+    return row.schoolName || `${row.schoolName}|${row.majorGroup}`;
 }
 
 function containsAny(text, words) {
