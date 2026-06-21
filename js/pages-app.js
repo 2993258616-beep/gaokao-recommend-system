@@ -53,6 +53,7 @@ const $ = id => document.getElementById(id);
 let appBooted = false;
 let recommendNonce = 0;
 let lastCriteriaKey = '';
+let manualRecommendStarted = false;
 let staticLoginUsersPromise = null;
 let staticLoginHeartbeat = null;
 let staticLoginAutoReleaseBound = false;
@@ -70,11 +71,15 @@ document.querySelectorAll('.subject').forEach(btn => {
 
 $('recommendBtn').addEventListener('click', () => {
     const criteriaKey = getCurrentCriteriaKey();
-    if (criteriaKey === lastCriteriaKey) {
+    if (criteriaKey !== lastCriteriaKey) {
+        recommendNonce = 0;
+        lastCriteriaKey = criteriaKey;
+        manualRecommendStarted = true;
+    } else if (manualRecommendStarted) {
         recommendNonce = (recommendNonce + 1) % PLAN_COUNT;
     } else {
         recommendNonce = 0;
-        lastCriteriaKey = criteriaKey;
+        manualRecommendStarted = true;
     }
     renderRecommend();
 });
@@ -335,6 +340,7 @@ function renderProvinceOptions() {
 function resetPlanAndRender() {
     recommendNonce = 0;
     lastCriteriaKey = getCurrentCriteriaKey();
+    manualRecommendStarted = false;
     renderRecommend();
 }
 
@@ -353,6 +359,7 @@ function renderRecommend() {
     if (criteriaKey !== lastCriteriaKey) {
         recommendNonce = 0;
         lastCriteriaKey = criteriaKey;
+        manualRecommendStarted = false;
     }
     $('tagSubject').innerText = subjectType + '类';
     $('tagProvince').innerText = schoolProvince;
