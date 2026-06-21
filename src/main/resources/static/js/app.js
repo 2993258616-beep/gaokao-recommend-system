@@ -61,7 +61,7 @@ function renderRecommend() {
 
     fetchRecommendRows(score, schoolProvince, recommendNonce)
         .then(rows => {
-            if (recommendNonce > 0 && !hasRecommendationRows(rows)) {
+            if (shouldResetRecommendationBatch(rows, schoolProvince)) {
                 recommendNonce = 0;
                 renderSummaryText(score, schoolProvince);
                 return fetchRecommendRows(score, schoolProvince, recommendNonce);
@@ -104,6 +104,18 @@ function fetchRecommendRows(score, schoolProvince, nonce) {
 
 function hasRecommendationRows(rows) {
     return Boolean(rows && ['rush', 'stable', 'safe'].some(bucket => Array.isArray(rows[bucket]) && rows[bucket].length));
+}
+
+function shouldResetRecommendationBatch(rows, schoolProvince) {
+    if (recommendNonce <= 0) return false;
+    if (!hasRecommendationRows(rows)) return true;
+    if (!schoolProvince || schoolProvince === '全部地区') return false;
+    return !hasMeaningfulRegionalBatch(rows);
+}
+
+function hasMeaningfulRegionalBatch(rows) {
+    const counts = ['rush', 'stable', 'safe'].map(bucket => Array.isArray(rows[bucket]) ? rows[bucket].length : 0);
+    return counts.every(count => count > 0) && counts.reduce((total, count) => total + count, 0) >= MAX_VISIBLE_ROWS * 2;
 }
 
 function section(type, word, title, desc, rows) {
