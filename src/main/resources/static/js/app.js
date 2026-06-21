@@ -1,6 +1,15 @@
 let subjectType = '历史';
 const MAX_VISIBLE_ROWS = 3;
 const PLAN_COUNT = 6;
+const SPECIAL_JUNIOR_COLLEGE_DISPLAYS = new Map([
+    ['河南理工大学', '河南理工大学（民政学院·专科批）'],
+    ['平顶山学院', '平顶山学院（医药科技学院·专科批）']
+]);
+const UNDERGRAD_LIKE_SCHOOL_WORDS = ['大学', '学院'];
+const VOCATIONAL_SCHOOL_WORDS = [
+    '职业', '技术', '高等专科', '专科学校', '职工大学',
+    '开放大学', '广播电视大学', '技师', '干部'
+];
 const $ = id => document.getElementById(id);
 let recommendNonce = 0;
 let lastCriteriaKey = '';
@@ -82,7 +91,7 @@ function section(type, word, title, desc, rows) {
     } else {
         body = `<table class="recommend-table"><thead><tr><th>院校/专业组</th><th>专业</th><th>学校地区</th></tr></thead><tbody>`
             + rows.map(r => `<tr>
-                <td><div class="school-name">${escapeHtml(r.schoolName)} ${escapeHtml(r.majorGroup || '')}组</div><div class="sub-info">${escapeHtml(r.schoolType || '')} · ${escapeHtml(r.schoolLevel || '')} · 河南考生</div></td>
+                <td><div class="school-name">${escapeHtml(displaySchoolName(r))} ${escapeHtml(r.majorGroup || '')}组</div><div class="sub-info">${escapeHtml(r.schoolType || '')} · ${escapeHtml(displaySchoolLevel(r))} · 河南考生</div></td>
                 <td class="major-cell">${renderMajorList(r.majorDirection || r.majorCategory || '')}</td>
                 <td>${escapeHtml(r.schoolProvince || '')}</td>
             </tr>`).join('') + '</tbody></table>';
@@ -111,6 +120,28 @@ function isJuniorCollege(row) {
         row.schoolName
     ].filter(Boolean).join(' ');
     return /专科|高职|高等专科学校/.test(text);
+}
+
+function displaySchoolName(row) {
+    if (!row || !row.schoolName) return '';
+    if (row.schoolLevel !== '专科') return row.schoolName || '';
+    const specialName = SPECIAL_JUNIOR_COLLEGE_DISPLAYS.get(row.schoolName);
+    if (specialName) return specialName;
+    if (isUndergradLikeJuniorCollege(row.schoolName)) return `${row.schoolName}（专科批）`;
+    return row.schoolName || '';
+}
+
+function displaySchoolLevel(row) {
+    if (row && row.schoolLevel === '专科'
+        && (SPECIAL_JUNIOR_COLLEGE_DISPLAYS.has(row.schoolName) || isUndergradLikeJuniorCollege(row.schoolName))) {
+        return '专科批';
+    }
+    return row.schoolLevel || '';
+}
+
+function isUndergradLikeJuniorCollege(schoolName) {
+    const name = String(schoolName || '');
+    return containsAny(name, UNDERGRAD_LIKE_SCHOOL_WORDS) && !containsAny(name, VOCATIONAL_SCHOOL_WORDS);
 }
 
 function renderMajorList(value) {
@@ -142,6 +173,10 @@ function normalizeMajorName(value) {
         .replace(/^术应用$/, '云计算技术应用')
         .replace(/置播电/g, '直播电商')
         .replace(/管、理与服务/g, '管理与服务');
+}
+
+function containsAny(text, words) {
+    return words.some(word => text.includes(word));
 }
 
 function escapeHtml(value) {

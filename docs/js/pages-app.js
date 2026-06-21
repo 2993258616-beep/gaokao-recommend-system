@@ -10,8 +10,29 @@ const NEAR_UNDERGRADUATE_MARGIN = 20;
 const STATIC_LOGIN_USER = 'admin';
 const STATIC_LOGIN_HASH = '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9';
 const STATIC_LOGIN_KEY = 'gaokao_pages_login_ok';
+const STATIC_LOGIN_ACCOUNT_KEY = 'gaokao_pages_login_account';
+const STATIC_LOGIN_SESSIONS_PREFIX = 'gaokao_pages_login_sessions:';
+const STATIC_LOGIN_MAX_ACTIVE_SESSIONS = 2;
+const STATIC_LOGIN_SESSION_TTL = 2 * 60 * 1000;
+const STATIC_LOGIN_HEARTBEAT_MS = 10 * 1000;
 const STATIC_LOGIN_FALLBACK_USERS = [
     { username: STATIC_LOGIN_USER, passwordHash: STATIC_LOGIN_HASH }
+];
+const STATIC_LOGIN_INSTANCE_ID = createStaticLoginInstanceId();
+const MAJOR_TEXT_FIXES = new Map([
+    ['濮阳医学高等专科学校|历史|102', '中医学(大学生村医免费培养计划)'],
+    ['漯河医学高等专科学校|历史|102', '临床医学(大学生村医免费培养计划)'],
+    ['南阳医学高等专科学校|历史|103', '临床医学(大学生村医免费培养计划)'],
+    ['南阳医学高等专科学校|历史|104', '中医学(大学生村医免费培养计划)']
+]);
+const SPECIAL_JUNIOR_COLLEGE_DISPLAYS = new Map([
+    ['河南理工大学', '河南理工大学（民政学院·专科批）'],
+    ['平顶山学院', '平顶山学院（医药科技学院·专科批）']
+]);
+const UNDERGRAD_LIKE_SCHOOL_WORDS = ['大学', '学院'];
+const VOCATIONAL_SCHOOL_WORDS = [
+    '职业', '技术', '高等专科', '专科学校', '职工大学',
+    '开放大学', '广播电视大学', '技师', '干部'
 ];
 const SCHOOL_PROVINCES = [
     '全部地区', '北京', '天津', '河北', '山西', '内蒙古',
@@ -41,7 +62,10 @@ const $ = id => document.getElementById(id);
 let appBooted = false;
 let recommendNonce = 0;
 let lastCriteriaKey = '';
+let manualRecommendStarted = false;
 let staticLoginUsersPromise = null;
+let staticLoginHeartbeat = null;
+let staticLoginAutoReleaseBound = false;
 
 setupStaticLogin();
 
@@ -56,11 +80,15 @@ document.querySelectorAll('.subject').forEach(btn => {
 
 $('recommendBtn').addEventListener('click', () => {
     const criteriaKey = getCurrentCriteriaKey();
-    if (criteriaKey === lastCriteriaKey) {
+    if (criteriaKey !== lastCriteriaKey) {
+        recommendNonce = 0;
+        lastCriteriaKey = criteriaKey;
+        manualRecommendStarted = true;
+    } else if (manualRecommendStarted) {
         recommendNonce = (recommendNonce + 1) % PLAN_COUNT;
     } else {
         recommendNonce = 0;
-        lastCriteriaKey = criteriaKey;
+        manualRecommendStarted = true;
     }
     renderRecommend();
 });
@@ -76,12 +104,19 @@ function setupStaticLogin() {
         return;
     }
 
-    const showLogin = () => {
+    const setLoginError = message => {
+        const error = $('loginError');
+        if (!error) return;
+        error.innerText = message || '';
+        error.hidden = !message;
+    };
+    const showLogin = message => {
         document.body.classList.add('locked');
         loginView.hidden = false;
         appView.hidden = true;
         const pass = $('loginPass');
         if (pass) pass.value = '';
+        setLoginError(message || '');
         setTimeout(() => $('loginUser') && $('loginUser').focus(), 0);
     };
     const showApp = () => {
@@ -93,22 +128,152 @@ function setupStaticLogin() {
 
     $('loginForm').addEventListener('submit', async event => {
         event.preventDefault();
-        const ok = await verifyStaticLogin($('loginUser').value.trim(), $('loginPass').value);
-        $('loginError').hidden = ok;
-        if (!ok) return;
-        sessionStorage.setItem(STATIC_LOGIN_KEY, '1');
+        const username = $('loginUser').value.trim();
+        const ok = await verifyStaticLogin(username, $('loginPass').value);
+        if (!ok) {
+            setLoginError('账号或密码错误，请重新输入。');
+            return;
+        }
+        if (!hasStaticLoginCapacity(username)) {
+            setLoginError('该账号已达到 2 个设备在线，请先退出其中一个后再登录。');
+            return;
+        }
+        startStaticLoginSession(username);
+        setLoginError('');
         showApp();
     });
     $('staticLogout').addEventListener('click', () => {
-        sessionStorage.removeItem(STATIC_LOGIN_KEY);
+        endStaticLoginSession();
         showLogin();
     });
 
-    if (sessionStorage.getItem(STATIC_LOGIN_KEY) === '1') {
+    const storedUsername = sessionStorage.getItem(STATIC_LOGIN_ACCOUNT_KEY);
+    if (sessionStorage.getItem(STATIC_LOGIN_KEY) === '1' && storedUsername && hasStaticLoginCapacity(storedUsername)) {
+        startStaticLoginSession(storedUsername);
         showApp();
     } else {
+        endStaticLoginSession(false);
         showLogin();
     }
+    bindStaticLoginAutoRelease(showLogin);
+}
+
+function startStaticLoginSession(username) {
+    const normalizedUsername = normalizeStaticUsername(username);
+    sessionStorage.setItem(STATIC_LOGIN_KEY, '1');
+    sessionStorage.setItem(STATIC_LOGIN_ACCOUNT_KEY, normalizedUsername);
+    refreshStaticLoginSession(normalizedUsername);
+    startStaticLoginHeartbeat(normalizedUsername);
+}
+
+function endStaticLoginSession(removeSession = true) {
+    const username = sessionStorage.getItem(STATIC_LOGIN_ACCOUNT_KEY);
+    if (removeSession && username) releaseStaticLoginSession(username);
+    clearStaticLoginHeartbeat();
+    sessionStorage.removeItem(STATIC_LOGIN_KEY);
+    sessionStorage.removeItem(STATIC_LOGIN_ACCOUNT_KEY);
+}
+
+function hasStaticLoginCapacity(username) {
+    const normalizedUsername = normalizeStaticUsername(username);
+    const sessions = readStaticLoginSessions(normalizedUsername);
+    if (sessions.some(session => session.sessionId === getStaticLoginSessionId())) return true;
+    return sessions.length < STATIC_LOGIN_MAX_ACTIVE_SESSIONS;
+}
+
+function refreshStaticLoginSession(username) {
+    const normalizedUsername = normalizeStaticUsername(username);
+    if (!normalizedUsername) return false;
+    const sessions = readStaticLoginSessions(normalizedUsername);
+    const currentSessionId = getStaticLoginSessionId();
+    const otherSessions = sessions.filter(session => session.sessionId !== currentSessionId);
+    if (otherSessions.length >= STATIC_LOGIN_MAX_ACTIVE_SESSIONS) return false;
+    const now = Date.now();
+    writeStaticLoginSessions(normalizedUsername, otherSessions.concat({
+        username: normalizedUsername,
+        sessionId: currentSessionId,
+        updatedAt: now,
+        expiresAt: now + STATIC_LOGIN_SESSION_TTL
+    }));
+    return true;
+}
+
+function releaseStaticLoginSession(username) {
+    const normalizedUsername = normalizeStaticUsername(username);
+    const currentSessionId = getStaticLoginSessionId();
+    const sessions = readStaticLoginSessions(normalizedUsername)
+        .filter(session => session.sessionId !== currentSessionId);
+    writeStaticLoginSessions(normalizedUsername, sessions);
+}
+
+function readStaticLoginSessions(username) {
+    const normalizedUsername = normalizeStaticUsername(username);
+    if (!normalizedUsername) return [];
+    try {
+        const value = localStorage.getItem(staticAccountSessionsKey(normalizedUsername));
+        if (!value) return [];
+        const parsed = JSON.parse(value);
+        const sessions = Array.isArray(parsed) ? parsed : [];
+        const now = Date.now();
+        const activeSessions = sessions.filter(session => session && session.sessionId && Number(session.expiresAt || 0) > now);
+        if (activeSessions.length !== sessions.length) {
+            writeStaticLoginSessions(normalizedUsername, activeSessions);
+        }
+        return activeSessions;
+    } catch (error) {
+        localStorage.removeItem(staticAccountSessionsKey(normalizedUsername));
+        return [];
+    }
+}
+
+function writeStaticLoginSessions(username, sessions) {
+    const normalizedUsername = normalizeStaticUsername(username);
+    if (!normalizedUsername) return;
+    if (!sessions.length) {
+        localStorage.removeItem(staticAccountSessionsKey(normalizedUsername));
+        return;
+    }
+    localStorage.setItem(staticAccountSessionsKey(normalizedUsername), JSON.stringify(sessions));
+}
+
+function startStaticLoginHeartbeat(username) {
+    clearStaticLoginHeartbeat();
+    staticLoginHeartbeat = setInterval(() => refreshStaticLoginSession(username), STATIC_LOGIN_HEARTBEAT_MS);
+}
+
+function clearStaticLoginHeartbeat() {
+    if (!staticLoginHeartbeat) return;
+    clearInterval(staticLoginHeartbeat);
+    staticLoginHeartbeat = null;
+}
+
+function getStaticLoginSessionId() {
+    return STATIC_LOGIN_INSTANCE_ID;
+}
+
+function createStaticLoginInstanceId() {
+    return window.crypto && window.crypto.randomUUID
+        ? window.crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function normalizeStaticUsername(username) {
+    return String(username || '').trim().toLowerCase();
+}
+
+function staticAccountSessionsKey(username) {
+    return `${STATIC_LOGIN_SESSIONS_PREFIX}${normalizeStaticUsername(username)}`;
+}
+
+function bindStaticLoginAutoRelease(showLogin) {
+    if (staticLoginAutoReleaseBound) return;
+    staticLoginAutoReleaseBound = true;
+    const releaseCurrentPageLogin = () => endStaticLoginSession();
+    window.addEventListener('pagehide', releaseCurrentPageLogin);
+    window.addEventListener('beforeunload', releaseCurrentPageLogin);
+    window.addEventListener('pageshow', event => {
+        if (event.persisted && sessionStorage.getItem(STATIC_LOGIN_KEY) !== '1') showLogin();
+    });
 }
 
 function bootApp() {
@@ -184,6 +349,7 @@ function renderProvinceOptions() {
 function resetPlanAndRender() {
     recommendNonce = 0;
     lastCriteriaKey = getCurrentCriteriaKey();
+    manualRecommendStarted = false;
     renderRecommend();
 }
 
@@ -202,6 +368,7 @@ function renderRecommend() {
     if (criteriaKey !== lastCriteriaKey) {
         recommendNonce = 0;
         lastCriteriaKey = criteriaKey;
+        manualRecommendStarted = false;
     }
     $('tagSubject').innerText = subjectType + '类';
     $('tagProvince').innerText = schoolProvince;
@@ -218,29 +385,50 @@ function recommend(score, subject, schoolProvince) {
     const rushCandidates = recommendBucket(score, subject, schoolProvince, '冲刺', limits[0]);
     const stableCandidates = recommendBucket(score, subject, schoolProvince, '稳妥', limits[1]);
     const safeCandidates = recommendBucket(score, subject, schoolProvince, '保底', limits[2]);
+    const previousBatchKeys = previousRecommendationKeys(score, subject, schoolProvince,
+        rushCandidates, stableCandidates, safeCandidates);
 
     const used = new Map();
-    const rushRows = takeUniqueRows(varyCandidateOrder(rushCandidates, score, subject, schoolProvince, '冲刺'), used);
+    const rushRows = takeUniqueRows(varyCandidateOrder(rushCandidates, score, subject, schoolProvince, '冲刺'), used, previousBatchKeys);
     const allRegions = !schoolProvince || schoolProvince === '全部地区';
     let stableRows;
     let safeRows;
     if (allRegions) {
-        stableRows = takeUniqueRows(varyCandidateOrder(stableCandidates, score, subject, schoolProvince, '稳妥'), used);
-        safeRows = takeUniqueRows(varyCandidateOrder(safeCandidates, score, subject, schoolProvince, '保底'), used);
+        stableRows = takeUniqueRows(varyCandidateOrder(stableCandidates, score, subject, schoolProvince, '稳妥'), used, previousBatchKeys);
+        safeRows = takeUniqueRows(varyCandidateOrder(safeCandidates, score, subject, schoolProvince, '保底'), used, previousBatchKeys);
     } else {
-        stableRows = takeUniqueRows(varyCandidateOrder(stableCandidates, score, subject, schoolProvince, '稳妥'), used);
-        safeRows = takeUniqueRows(varyCandidateOrder(safeCandidates, score, subject, schoolProvince, '保底'), used);
+        stableRows = takeUniqueRows(varyCandidateOrder(stableCandidates, score, subject, schoolProvince, '稳妥'), used, previousBatchKeys);
+        safeRows = takeUniqueRows(varyCandidateOrder(safeCandidates, score, subject, schoolProvince, '保底'), used, previousBatchKeys);
     }
     rebalanceScarceHighScoreRows(score, subject, rushRows, stableRows, safeRows);
     const canonicalRows = canonicalizeRows(score, rushRows, stableRows, safeRows,
-        rushCandidates, stableCandidates, safeCandidates);
-    if (allRegions) enforceHenanFirstPageRows(canonicalRows, score, subject);
+        rushCandidates, stableCandidates, safeCandidates, previousBatchKeys);
+    if (allRegions) enforceHenanFirstPageRows(canonicalRows, score, subject, previousBatchKeys);
 
     return {
         rush: canonicalRows.rush.map(row => polishPrediction(row, score, '冲刺')),
         stable: canonicalRows.stable.map(row => polishPrediction(row, score, '稳妥')),
         safe: canonicalRows.safe.map(row => polishPrediction(row, score, '保底'))
     };
+}
+
+function previousRecommendationKeys(score, subject, schoolProvince, rushCandidates, stableCandidates, safeCandidates) {
+    const keys = new Set();
+    const currentNonce = recommendNonce;
+    for (let plan = 0; plan < currentNonce; plan++) {
+        recommendNonce = plan;
+        const used = new Map();
+        const rushRows = takeUniqueRows(varyCandidateOrder(rushCandidates, score, subject, schoolProvince, '冲刺'), used, keys);
+        const stableRows = takeUniqueRows(varyCandidateOrder(stableCandidates, score, subject, schoolProvince, '稳妥'), used, keys);
+        const safeRows = takeUniqueRows(varyCandidateOrder(safeCandidates, score, subject, schoolProvince, '保底'), used, keys);
+        rebalanceScarceHighScoreRows(score, subject, rushRows, stableRows, safeRows);
+        const canonicalRows = canonicalizeRows(score, rushRows, stableRows, safeRows,
+            rushCandidates, stableCandidates, safeCandidates, keys);
+        if (!schoolProvince || schoolProvince === '全部地区') enforceHenanFirstPageRows(canonicalRows, score, subject, keys);
+        [...canonicalRows.rush, ...canonicalRows.stable, ...canonicalRows.safe].forEach(row => keys.add(rowKey(row)));
+    }
+    recommendNonce = currentNonce;
+    return keys;
 }
 
 function recommendBucket(score, subject, schoolProvince, bucket, preferredHenanCount) {
@@ -325,15 +513,16 @@ function rebalanceScarceHighScoreRows(score, subject, rushRows, stableRows, safe
     }
 }
 
-function canonicalizeRows(score, ...sources) {
+function canonicalizeRows(score, rushRows, stableRows, safeRows, rushCandidates, stableCandidates, safeCandidates, excludedKeys = new Set()) {
     const result = { rush: [], stable: [], safe: [] };
     const used = new Set();
+    const sources = [rushRows, stableRows, safeRows, rushCandidates, stableCandidates, safeCandidates];
     for (const source of sources) {
         if (!source) continue;
         for (const row of source) {
             if (!row) continue;
             const key = rowKey(row);
-            if (used.has(key)) continue;
+            if (used.has(key) || excludedKeys.has(key)) continue;
             const bucket = canonicalBucket(row, score);
             if (result[bucket].length >= MAX_VISIBLE_ROWS) continue;
             result[bucket].push(row);
@@ -341,7 +530,7 @@ function canonicalizeRows(score, ...sources) {
         }
     }
     rebalanceEmptyCanonicalRows(result);
-    fillCanonicalRows(result, score, sources);
+    fillCanonicalRows(result, score, sources, excludedKeys);
     return result;
 }
 
@@ -380,20 +569,20 @@ function moveEdgeRow(fromRows, toRows, highest) {
     return true;
 }
 
-function fillCanonicalRows(result, score, sources) {
+function fillCanonicalRows(result, score, sources, excludedKeys = new Set()) {
     const used = new Set([...result.rush, ...result.stable, ...result.safe].map(rowKey));
-    fillCanonicalBucket(result.rush, 'rush', score, used, sources);
-    fillCanonicalBucket(result.stable, 'stable', score, used, sources);
-    fillCanonicalBucket(result.safe, 'safe', score, used, sources);
+    fillCanonicalBucket(result.rush, 'rush', score, used, sources, excludedKeys);
+    fillCanonicalBucket(result.stable, 'stable', score, used, sources, excludedKeys);
+    fillCanonicalBucket(result.safe, 'safe', score, used, sources, excludedKeys);
 }
 
-function fillCanonicalBucket(rows, bucket, score, used, sources) {
+function fillCanonicalBucket(rows, bucket, score, used, sources, excludedKeys = new Set()) {
     for (const source of sources) {
         if (!source) continue;
         for (const row of source) {
             if (!row || rows.length >= MAX_VISIBLE_ROWS) return;
             const key = rowKey(row);
-            if (used.has(key) || canonicalBucket(row, score) !== bucket) continue;
+            if (used.has(key) || excludedKeys.has(key) || canonicalBucket(row, score) !== bucket) continue;
             rows.push(row);
             used.add(key);
         }
@@ -547,11 +736,11 @@ function compareRows(a, b, score, bucket) {
     return scoreOf(b) - scoreOf(a);
 }
 
-function takeUniqueRows(candidates, used) {
+function takeUniqueRows(candidates, used, excludedKeys = new Set()) {
     const rows = [];
     for (const row of candidates) {
         const key = rowKey(row);
-        if (used.has(key)) continue;
+        if (used.has(key) || excludedKeys.has(key)) continue;
         rows.push(row);
         used.set(key, row);
         if (rows.length >= MAX_VISIBLE_ROWS) break;
@@ -601,11 +790,20 @@ function henanLimitsByBucket(score, subject, schoolProvince) {
     if (schoolProvince && schoolProvince !== '全部地区') {
         return [MAX_VISIBLE_ROWS, MAX_VISIBLE_ROWS, MAX_VISIBLE_ROWS];
     }
+    const rule = henanFirstPageRule(score);
+    if (rule && rule.min >= 5) return [2, 2, 2];
+    if (rule && rule.min >= 3) return [1, 1, 1];
     const totalLimit = clamp(totalHenanLimit(score, subject), 1, 4);
     if (totalLimit === 1) return rotateHenanLimits(score, subject, [1, 0, 0], [0, 1, 0], [0, 0, 1]);
     if (totalLimit === 2) return rotateHenanLimits(score, subject, [1, 1, 0], [1, 0, 1], [0, 1, 1]);
     if (totalLimit === 3) return [1, 1, 1];
     return rotateHenanLimits(score, subject, [2, 1, 1], [1, 2, 1], [1, 1, 2]);
+}
+
+function henanFirstPageRule(score) {
+    if (score >= 160 && score <= 300) return { min: 5, max: 6 };
+    if (score > 300 && score <= 600) return { min: 3, max: 4 };
+    return null;
 }
 
 function totalHenanLimit(score, subject) {
@@ -630,29 +828,127 @@ function rotatedHenanBuckets(score, subject) {
     return buckets.slice(offset).concat(buckets.slice(0, offset));
 }
 
-function enforceHenanFirstPageRows(rows, score, subject) {
-    trimHenanFirstPageRows(rows);
-    if (countHenanFirstPageRows(rows) >= 1) return;
-    const used = new Set([...rows.rush, ...rows.stable, ...rows.safe].map(rowKey));
-    for (const bucket of rotatedHenanBuckets(score, subject)) {
-        const nearLineJuniorCollege = shouldUseQualityJuniorCollege(score, subject, bucket);
-        const allowUndergraduate = score >= undergraduateLine(subject) && !nearLineJuniorCollege;
-        const allowJuniorCollege = score < undergraduateLine(subject) || nearLineJuniorCollege;
-        const candidates = recommendBucket(score, subject, '河南', bucket, MAX_VISIBLE_ROWS);
-        for (const row of candidates) {
-            if (!row || !isHenan(row) || used.has(rowKey(row))) continue;
-            const target = rows[canonicalBucket(row, score)];
-            if (addOrReplaceHenanRow(target, row)) return;
+function enforceHenanFirstPageRows(rows, score, subject, excludedKeys = new Set()) {
+    const rule = henanFirstPageRule(score);
+    if (!rule) return;
+    const targetCount = targetHenanFirstPageCount(score, subject, rule);
+    ensureHenanBucketCoverage(rows, score, subject, excludedKeys);
+    fillHenanFirstPageRows(rows, score, subject, targetCount, excludedKeys);
+    trimHenanFirstPageRows(rows, rule.max);
+    ensureHenanBucketCoverage(rows, score, subject, excludedKeys);
+    fillHenanFirstPageRows(rows, score, subject, targetCount, excludedKeys);
+    trimHenanFirstPageRows(rows, rule.max);
+}
+
+function targetHenanFirstPageCount(score, subject, rule) {
+    const spread = rule.max - rule.min;
+    if (spread <= 0) return rule.min;
+    let seed = (score || 0) + recommendNonce;
+    if (subject === '物理') seed += 17;
+    return rule.min + (((seed % (spread + 1)) + (spread + 1)) % (spread + 1));
+}
+
+function ensureHenanBucketCoverage(rows, score, subject, excludedKeys = new Set()) {
+    const used = currentRowKeys(rows);
+    excludedKeys.forEach(key => used.add(key));
+    for (const config of henanBucketConfigs(score, subject)) {
+        if (rows[config.key].some(isHenan)) continue;
+        const candidate = findHenanCandidateForBucket(score, subject, config.bucket, used);
+        if (candidate && addOrReplaceHenanRow(rows[config.key], candidate, used, score, subject, config.key)) {
+            used.add(rowKey(candidate));
         }
     }
 }
 
-function trimHenanFirstPageRows(rows) {
+function fillHenanFirstPageRows(rows, score, subject, minCount, excludedKeys = new Set()) {
+    const used = currentRowKeys(rows);
+    excludedKeys.forEach(key => used.add(key));
     let count = countHenanFirstPageRows(rows);
-    if (count <= 4) return;
+    while (count < minCount) {
+        let changed = false;
+        for (const config of henanBucketConfigs(score, subject)) {
+            if (count >= minCount) return;
+            const candidate = findHenanCandidateForBucket(score, subject, config.bucket, used);
+            if (!candidate) continue;
+            if (addOrReplaceHenanRow(rows[config.key], candidate, used, score, subject, config.key)) {
+                used.add(rowKey(candidate));
+                count = countHenanFirstPageRows(rows);
+                changed = true;
+            }
+        }
+        if (!changed) return;
+    }
+}
+
+function henanBucketConfigs(score, subject) {
+    const configs = [
+        { key: 'rush', bucket: '冲刺' },
+        { key: 'stable', bucket: '稳妥' },
+        { key: 'safe', bucket: '保底' }
+    ];
+    const order = rotatedHenanBuckets(score, subject);
+    return order.map(bucket => configs.find(config => config.bucket === bucket)).filter(Boolean);
+}
+
+function findHenanCandidateForBucket(score, subject, bucket, used) {
+    const nearLineJuniorCollege = shouldUseQualityJuniorCollege(score, subject, bucket);
+    const allowUndergraduate = score >= undergraduateLine(subject) && !nearLineJuniorCollege;
+    const allowJuniorCollege = score < undergraduateLine(subject) || nearLineJuniorCollege;
+    const candidates = queryCandidatesWithFallback(score, subject, '河南', bucket, allowUndergraduate,
+        allowJuniorCollege, nearLineJuniorCollege, QUERY_LIMIT);
+    for (const row of candidates) {
+        if (isUsableHenanCandidate(row, used)) return row;
+    }
+    const fallbackBuckets = bucket === '冲刺'
+        ? ['冲刺高分兜底']
+        : (bucket === '稳妥' ? ['保底同省补足'] : ['保底扩展', '保底兜底', '保底同省补足']);
+    for (const fallbackBucket of fallbackBuckets) {
+        const fallback = queryCandidatesWithFallback(score, subject, '河南', fallbackBucket, allowUndergraduate,
+            allowJuniorCollege, nearLineJuniorCollege, QUERY_LIMIT);
+        for (const row of fallback) {
+            if (isUsableHenanCandidate(row, used)) return row;
+        }
+    }
+    for (const row of queryAnyHenanCandidates(score, subject)) {
+        if (isUsableHenanCandidate(row, used)) return row;
+    }
+    return null;
+}
+
+function queryAnyHenanCandidates(score, subject) {
+    const line = undergraduateLine(subject);
+    const juniorOnly = score < line + NEAR_UNDERGRADUATE_MARGIN;
+    return predictionLines
+        .filter(row => row.province === '河南')
+        .filter(row => row.subjectType === subject)
+        .filter(row => row.schoolProvince === '河南')
+        .filter(row => row.schoolProvince && row.schoolProvince !== '未识别')
+        .filter(row => row.majorDirection && row.majorDirection.trim() && !row.majorDirection.includes('未提供'))
+        .filter(row => row.majorCategory && row.majorCategory.trim() && !['理', '术', '技', '管理', '商务', '包含', '未提供', '专业', '验技术', '方向'].includes(row.majorCategory))
+        .filter(row => !juniorOnly || row.schoolLevel === '专科')
+        .sort((a, b) => {
+            const distance = Math.abs(scoreOf(a) - score) - Math.abs(scoreOf(b) - score);
+            if (distance !== 0) return distance;
+            return scoreOf(b) - scoreOf(a);
+        })
+        .slice(0, QUERY_LIMIT);
+}
+
+function isUsableHenanCandidate(row, used) {
+    return row && isHenan(row) && !used.has(rowKey(row));
+}
+
+function currentRowKeys(rows) {
+    return new Set([...rows.rush, ...rows.stable, ...rows.safe].map(rowKey));
+}
+
+function trimHenanFirstPageRows(rows, maxCount) {
+    let count = countHenanFirstPageRows(rows);
+    if (count <= maxCount) return;
     for (const bucket of ['safe', 'stable', 'rush']) {
-        for (let i = rows[bucket].length - 1; i >= 0 && count > 4; i--) {
+        for (let i = rows[bucket].length - 1; i >= 0 && count > maxCount; i--) {
             if (!isHenan(rows[bucket][i])) continue;
+            if (countHenanRows(rows[bucket]) <= 1) continue;
             rows[bucket].splice(i, 1);
             count--;
         }
@@ -663,18 +959,48 @@ function countHenanFirstPageRows(rows) {
     return [...rows.rush, ...rows.stable, ...rows.safe].filter(isHenan).length;
 }
 
-function addOrReplaceHenanRow(rows, candidate) {
+function countHenanRows(rows) {
+    return rows.filter(isHenan).length;
+}
+
+function addOrReplaceHenanRow(rows, candidate, used = new Set(), score = 0, subject = '', bucketKey = '') {
     if (!rows || !candidate) return false;
+    if (used.has(rowKey(candidate))) return false;
     if (rows.length < MAX_VISIBLE_ROWS) {
-        rows.push(candidate);
+        const slots = Array.from({ length: rows.length + 1 }, (_, index) => index);
+        rows.splice(naturalHenanIndex(slots, candidate, score, subject, bucketKey), 0, candidate);
         return true;
     }
-    for (let i = rows.length - 1; i >= 0; i--) {
-        if (isHenan(rows[i])) continue;
-        rows[i] = candidate;
-        return true;
-    }
-    return false;
+    const replaceableIndexes = rows
+        .map((row, index) => isHenan(row) ? -1 : index)
+        .filter(index => index >= 0);
+    if (!replaceableIndexes.length) return false;
+    rows[naturalHenanIndex(replaceableIndexes, candidate, score, subject, bucketKey)] = candidate;
+    return true;
+}
+
+function naturalHenanIndex(indexes, candidate, score, subject, bucketKey) {
+    const preferred = preferredHenanSlot(score, subject, bucketKey);
+    const tieBreak = seededOffset(`${score}|${subject}|${bucketKey}|${recommendNonce}|${rowKey(candidate)}`, indexes.length);
+    return indexes.slice().sort((a, b) => {
+        const distance = Math.abs(a - preferred) - Math.abs(b - preferred);
+        if (distance !== 0) return distance;
+        return ((a + tieBreak) % MAX_VISIBLE_ROWS) - ((b + tieBreak) % MAX_VISIBLE_ROWS);
+    })[0];
+}
+
+function preferredHenanSlot(score, subject, bucketKey) {
+    const patterns = {
+        rush: [1, 0, 2],
+        stable: [0, 2, 1],
+        safe: [2, 1, 0]
+    };
+    let seed = score || 0;
+    if (subject === '物理') seed += 17;
+    const plan = (((seed + recommendNonce) % MAX_VISIBLE_ROWS) + MAX_VISIBLE_ROWS) % MAX_VISIBLE_ROWS;
+    const slots = patterns[bucketKey];
+    if (slots) return slots[plan];
+    return plan;
 }
 
 function polishPrediction(row, score, bucket) {
@@ -709,26 +1035,64 @@ function section(type, word, title, desc, rows) {
     } else {
         body = `<table class="recommend-table"><thead><tr><th>院校/专业组</th><th>专业</th><th>学校地区</th></tr></thead><tbody>`
             + rows.map(r => `<tr>
-                <td><div class="school-name">${escapeHtml(r.schoolName)} ${escapeHtml(r.majorGroup || '')}组</div><div class="sub-info">${escapeHtml(r.schoolType || '')} · ${escapeHtml(r.schoolLevel || '')} · 河南考生</div></td>
-                <td class="major-cell">${renderMajorList(r.majorDirection || r.majorCategory || '')}</td>
+                <td><div class="school-name">${escapeHtml(displaySchoolName(r))} ${escapeHtml(r.majorGroup || '')}组</div><div class="sub-info">${escapeHtml(r.schoolType || '')} · ${escapeHtml(displaySchoolLevel(r))} · 河南考生</div></td>
+                <td class="major-cell">${renderMajorList(resolveMajorText(r))}</td>
                 <td>${escapeHtml(r.schoolProvince || '')}</td>
             </tr>`).join('') + '</tbody></table>';
     }
     return `<div class="block ${type}"><div class="block-side"><div class="round">${word}</div><h2>${title}</h2><p>${desc}</p></div><div class="table-wrap">${body}</div></div>`;
 }
 
+function displaySchoolName(row) {
+    if (!row || !row.schoolName) return '';
+    if (row.schoolLevel !== '专科') return row.schoolName || '';
+    const specialName = SPECIAL_JUNIOR_COLLEGE_DISPLAYS.get(row.schoolName);
+    if (specialName) return specialName;
+    if (isUndergradLikeJuniorCollege(row.schoolName)) return `${row.schoolName}（专科批）`;
+    return row.schoolName || '';
+}
+
+function displaySchoolLevel(row) {
+    if (row && row.schoolLevel === '专科'
+        && (SPECIAL_JUNIOR_COLLEGE_DISPLAYS.has(row.schoolName) || isUndergradLikeJuniorCollege(row.schoolName))) {
+        return '专科批';
+    }
+    return row.schoolLevel || '';
+}
+
+function isUndergradLikeJuniorCollege(schoolName) {
+    const name = String(schoolName || '');
+    return containsAny(name, UNDERGRAD_LIKE_SCHOOL_WORDS) && !containsAny(name, VOCATIONAL_SCHOOL_WORDS);
+}
+
 function renderMajorList(value) {
     const text = normalizeMajorName(String(value == null ? '' : value).trim());
-    if (!text) return '';
-    const parts = text.split(/[、,，;；]/).map(v => normalizeMajorName(v.trim())).filter(Boolean);
+    if (!isRenderableMajorText(text)) return '';
+    const parts = text.split(/[、,，;；]/).map(v => normalizeMajorName(v.trim())).filter(isRenderableMajorText);
     if (parts.length <= 1) return `<span class="major-text">${escapeHtml(text)}</span>`;
     const visibleParts = parts.slice(0, 3);
     const suffix = parts.length > 3 ? '<span class="major-chip more">等</span>' : '';
     return `<div class="major-list">${visibleParts.map(v => `<span class="major-chip">${escapeHtml(v)}</span>`).join('')}${suffix}</div>`;
 }
 
+function resolveMajorText(row) {
+    const fixed = MAJOR_TEXT_FIXES.get(`${row.schoolName}|${row.subjectType}|${row.majorGroup}`);
+    const candidates = [row.majorDirection, row.majorCategory]
+        .map(value => normalizeMajorName(String(value || '').trim()))
+        .filter(isRenderableMajorText);
+    if (candidates.length) return candidates[0];
+    return fixed || '';
+}
+
 function normalizeMajorName(value) {
     return value
+        .replace(/^划[)）]?$/, '')
+        .replace(/^中压学/, '中医学')
+        .replace(/^格床医学/, '临床医学')
+        .replace(/竹医/g, '村医')
+        .replace(/免赀/g, '免费')
+        .replace(/诗划/g, '计划')
+        .replace(/培养计划$/, '培养计划)')
         .replace(/^锁经营与管理$/, '连锁经营与管理')
         .replace(/^件技术/, '软件技术')
         .replace(/^字媒体技术/, '数字媒体技术')
@@ -744,6 +1108,14 @@ function normalizeMajorName(value) {
         .replace(/^术应用$/, '云计算技术应用')
         .replace(/置播电/g, '直播电商')
         .replace(/管、理与服务/g, '管理与服务');
+}
+
+function isRenderableMajorText(value) {
+    const text = String(value || '').trim();
+    if (!text) return false;
+    if (/^划[)）]?$/.test(text)) return false;
+    if (/^[)）]+$/.test(text)) return false;
+    return true;
 }
 
 function undergraduateLine(subject) {

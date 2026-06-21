@@ -25,6 +25,15 @@ const MAJOR_TEXT_FIXES = new Map([
     ['南阳医学高等专科学校|历史|103', '临床医学(大学生村医免费培养计划)'],
     ['南阳医学高等专科学校|历史|104', '中医学(大学生村医免费培养计划)']
 ]);
+const SPECIAL_JUNIOR_COLLEGE_DISPLAYS = new Map([
+    ['河南理工大学', '河南理工大学（民政学院·专科批）'],
+    ['平顶山学院', '平顶山学院（医药科技学院·专科批）']
+]);
+const UNDERGRAD_LIKE_SCHOOL_WORDS = ['大学', '学院'];
+const VOCATIONAL_SCHOOL_WORDS = [
+    '职业', '技术', '高等专科', '专科学校', '职工大学',
+    '开放大学', '广播电视大学', '技师', '干部'
+];
 const SCHOOL_PROVINCES = [
     '全部地区', '北京', '天津', '河北', '山西', '内蒙古',
     '辽宁', '吉林', '黑龙江', '上海', '江苏',
@@ -1035,20 +1044,25 @@ function section(type, word, title, desc, rows) {
 }
 
 function displaySchoolName(row) {
-    if (row.schoolName === '河南理工大学' && row.schoolLevel === '专科') {
-        return '河南理工大学（民政学院·专科批）';
-    }
-    if (row.schoolName === '平顶山学院' && row.schoolLevel === '专科') {
-        return '平顶山学院（医药科技学院·专科批）';
-    }
+    if (!row || !row.schoolName) return '';
+    if (row.schoolLevel !== '专科') return row.schoolName || '';
+    const specialName = SPECIAL_JUNIOR_COLLEGE_DISPLAYS.get(row.schoolName);
+    if (specialName) return specialName;
+    if (isUndergradLikeJuniorCollege(row.schoolName)) return `${row.schoolName}（专科批）`;
     return row.schoolName || '';
 }
 
 function displaySchoolLevel(row) {
-    if (row.schoolLevel === '专科' && ['河南理工大学', '平顶山学院'].includes(row.schoolName)) {
+    if (row && row.schoolLevel === '专科'
+        && (SPECIAL_JUNIOR_COLLEGE_DISPLAYS.has(row.schoolName) || isUndergradLikeJuniorCollege(row.schoolName))) {
         return '专科批';
     }
     return row.schoolLevel || '';
+}
+
+function isUndergradLikeJuniorCollege(schoolName) {
+    const name = String(schoolName || '');
+    return containsAny(name, UNDERGRAD_LIKE_SCHOOL_WORDS) && !containsAny(name, VOCATIONAL_SCHOOL_WORDS);
 }
 
 function renderMajorList(value) {
