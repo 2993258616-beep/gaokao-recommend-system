@@ -369,29 +369,50 @@ function recommend(score, subject, schoolProvince) {
     const rushCandidates = recommendBucket(score, subject, schoolProvince, '冲刺', limits[0]);
     const stableCandidates = recommendBucket(score, subject, schoolProvince, '稳妥', limits[1]);
     const safeCandidates = recommendBucket(score, subject, schoolProvince, '保底', limits[2]);
+    const previousBatchKeys = previousRecommendationKeys(score, subject, schoolProvince,
+        rushCandidates, stableCandidates, safeCandidates);
 
     const used = new Map();
-    const rushRows = takeUniqueRows(varyCandidateOrder(rushCandidates, score, subject, schoolProvince, '冲刺'), used);
+    const rushRows = takeUniqueRows(varyCandidateOrder(rushCandidates, score, subject, schoolProvince, '冲刺'), used, previousBatchKeys);
     const allRegions = !schoolProvince || schoolProvince === '全部地区';
     let stableRows;
     let safeRows;
     if (allRegions) {
-        stableRows = takeUniqueRows(varyCandidateOrder(stableCandidates, score, subject, schoolProvince, '稳妥'), used);
-        safeRows = takeUniqueRows(varyCandidateOrder(safeCandidates, score, subject, schoolProvince, '保底'), used);
+        stableRows = takeUniqueRows(varyCandidateOrder(stableCandidates, score, subject, schoolProvince, '稳妥'), used, previousBatchKeys);
+        safeRows = takeUniqueRows(varyCandidateOrder(safeCandidates, score, subject, schoolProvince, '保底'), used, previousBatchKeys);
     } else {
-        stableRows = takeUniqueRows(varyCandidateOrder(stableCandidates, score, subject, schoolProvince, '稳妥'), used);
-        safeRows = takeUniqueRows(varyCandidateOrder(safeCandidates, score, subject, schoolProvince, '保底'), used);
+        stableRows = takeUniqueRows(varyCandidateOrder(stableCandidates, score, subject, schoolProvince, '稳妥'), used, previousBatchKeys);
+        safeRows = takeUniqueRows(varyCandidateOrder(safeCandidates, score, subject, schoolProvince, '保底'), used, previousBatchKeys);
     }
     rebalanceScarceHighScoreRows(score, subject, rushRows, stableRows, safeRows);
     const canonicalRows = canonicalizeRows(score, rushRows, stableRows, safeRows,
-        rushCandidates, stableCandidates, safeCandidates);
-    if (allRegions) enforceHenanFirstPageRows(canonicalRows, score, subject);
+        rushCandidates, stableCandidates, safeCandidates, previousBatchKeys);
+    if (allRegions) enforceHenanFirstPageRows(canonicalRows, score, subject, previousBatchKeys);
 
     return {
         rush: canonicalRows.rush.map(row => polishPrediction(row, score, '冲刺')),
         stable: canonicalRows.stable.map(row => polishPrediction(row, score, '稳妥')),
         safe: canonicalRows.safe.map(row => polishPrediction(row, score, '保底'))
     };
+}
+
+function previousRecommendationKeys(score, subject, schoolProvince, rushCandidates, stableCandidates, safeCandidates) {
+    const keys = new Set();
+    const currentNonce = recommendNonce;
+    for (let plan = 0; plan < currentNonce; plan++) {
+        recommendNonce = plan;
+        const used = new Map();
+        const rushRows = takeUniqueRows(varyCandidateOrder(rushCandidates, score, subject, schoolProvince, '冲刺'), used, keys);
+        const stableRows = takeUniqueRows(varyCandidateOrder(stableCandidates, score, subject, schoolProvince, '稳妥'), used, keys);
+        const safeRows = takeUniqueRows(varyCandidateOrder(safeCandidates, score, subject, schoolProvince, '保底'), used, keys);
+        rebalanceScarceHighScoreRows(score, subject, rushRows, stableRows, safeRows);
+        const canonicalRows = canonicalizeRows(score, rushRows, stableRows, safeRows,
+            rushCandidates, stableCandidates, safeCandidates, keys);
+        if (!schoolProvince || schoolProvince === '全部地区') enforceHenanFirstPageRows(canonicalRows, score, subject, keys);
+        [...canonicalRows.rush, ...canonicalRows.stable, ...canonicalRows.safe].forEach(row => keys.add(rowKey(row)));
+    }
+    recommendNonce = currentNonce;
+    return keys;
 }
 
 function recommendBucket(score, subject, schoolProvince, bucket, preferredHenanCount) {
@@ -476,15 +497,16 @@ function rebalanceScarceHighScoreRows(score, subject, rushRows, stableRows, safe
     }
 }
 
-function canonicalizeRows(score, ...sources) {
+function canonicalizeRows(score, rushRows, stableRows, safeRows, rushCandidates, stableCandidates, safeCandidates, excludedKeys = new Set()) {
     const result = { rush: [], stable: [], safe: [] };
     const used = new Set();
+    const sources = [rushRows, stableRows, safeRows, rushCandidates, stableCandidates, safeCandidates];
     for (const source of sources) {
         if (!source) continue;
         for (const row of source) {
             if (!row) continue;
             const key = rowKey(row);
-            if (used.has(key)) continue;
+            if (used.has(key) || excludedKeys.has(key)) continue;
             const bucket = canonicalBucket(row, score);
             if (result[bucket].length >= MAX_VISIBLE_ROWS) continue;
             result[bucket].push(row);
@@ -492,7 +514,7 @@ function canonicalizeRows(score, ...sources) {
         }
     }
     rebalanceEmptyCanonicalRows(result);
-    fillCanonicalRows(result, score, sources);
+    fillCanonicalRows(result, score, sources, excludedKeys);
     return result;
 }
 
@@ -531,20 +553,20 @@ function moveEdgeRow(fromRows, toRows, highest) {
     return true;
 }
 
-function fillCanonicalRows(result, score, sources) {
+function fillCanonicalRows(result, score, sources, excludedKeys = new Set()) {
     const used = new Set([...result.rush, ...result.stable, ...result.safe].map(rowKey));
-    fillCanonicalBucket(result.rush, 'rush', score, used, sources);
-    fillCanonicalBucket(result.stable, 'stable', score, used, sources);
-    fillCanonicalBucket(result.safe, 'safe', score, used, sources);
+    fillCanonicalBucket(result.rush, 'rush', score, used, sources, excludedKeys);
+    fillCanonicalBucket(result.stable, 'stable', score, used, sources, excludedKeys);
+    fillCanonicalBucket(result.safe, 'safe', score, used, sources, excludedKeys);
 }
 
-function fillCanonicalBucket(rows, bucket, score, used, sources) {
+function fillCanonicalBucket(rows, bucket, score, used, sources, excludedKeys = new Set()) {
     for (const source of sources) {
         if (!source) continue;
         for (const row of source) {
             if (!row || rows.length >= MAX_VISIBLE_ROWS) return;
             const key = rowKey(row);
-            if (used.has(key) || canonicalBucket(row, score) !== bucket) continue;
+            if (used.has(key) || excludedKeys.has(key) || canonicalBucket(row, score) !== bucket) continue;
             rows.push(row);
             used.add(key);
         }
@@ -698,11 +720,11 @@ function compareRows(a, b, score, bucket) {
     return scoreOf(b) - scoreOf(a);
 }
 
-function takeUniqueRows(candidates, used) {
+function takeUniqueRows(candidates, used, excludedKeys = new Set()) {
     const rows = [];
     for (const row of candidates) {
         const key = rowKey(row);
-        if (used.has(key)) continue;
+        if (used.has(key) || excludedKeys.has(key)) continue;
         rows.push(row);
         used.set(key, row);
         if (rows.length >= MAX_VISIBLE_ROWS) break;
@@ -790,15 +812,15 @@ function rotatedHenanBuckets(score, subject) {
     return buckets.slice(offset).concat(buckets.slice(0, offset));
 }
 
-function enforceHenanFirstPageRows(rows, score, subject) {
+function enforceHenanFirstPageRows(rows, score, subject, excludedKeys = new Set()) {
     const rule = henanFirstPageRule(score);
     if (!rule) return;
     const targetCount = targetHenanFirstPageCount(score, subject, rule);
-    ensureHenanBucketCoverage(rows, score, subject);
-    fillHenanFirstPageRows(rows, score, subject, targetCount);
+    ensureHenanBucketCoverage(rows, score, subject, excludedKeys);
+    fillHenanFirstPageRows(rows, score, subject, targetCount, excludedKeys);
     trimHenanFirstPageRows(rows, rule.max);
-    ensureHenanBucketCoverage(rows, score, subject);
-    fillHenanFirstPageRows(rows, score, subject, targetCount);
+    ensureHenanBucketCoverage(rows, score, subject, excludedKeys);
+    fillHenanFirstPageRows(rows, score, subject, targetCount, excludedKeys);
     trimHenanFirstPageRows(rows, rule.max);
 }
 
@@ -810,8 +832,9 @@ function targetHenanFirstPageCount(score, subject, rule) {
     return rule.min + (((seed % (spread + 1)) + (spread + 1)) % (spread + 1));
 }
 
-function ensureHenanBucketCoverage(rows, score, subject) {
+function ensureHenanBucketCoverage(rows, score, subject, excludedKeys = new Set()) {
     const used = currentRowKeys(rows);
+    excludedKeys.forEach(key => used.add(key));
     for (const config of henanBucketConfigs(score, subject)) {
         if (rows[config.key].some(isHenan)) continue;
         const candidate = findHenanCandidateForBucket(score, subject, config.bucket, used);
@@ -821,8 +844,9 @@ function ensureHenanBucketCoverage(rows, score, subject) {
     }
 }
 
-function fillHenanFirstPageRows(rows, score, subject, minCount) {
+function fillHenanFirstPageRows(rows, score, subject, minCount, excludedKeys = new Set()) {
     const used = currentRowKeys(rows);
+    excludedKeys.forEach(key => used.add(key));
     let count = countHenanFirstPageRows(rows);
     while (count < minCount) {
         let changed = false;
