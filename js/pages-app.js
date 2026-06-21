@@ -601,11 +601,20 @@ function henanLimitsByBucket(score, subject, schoolProvince) {
     if (schoolProvince && schoolProvince !== '全部地区') {
         return [MAX_VISIBLE_ROWS, MAX_VISIBLE_ROWS, MAX_VISIBLE_ROWS];
     }
+    const rule = henanFirstPageRule(score);
+    if (rule && rule.min >= 5) return [2, 2, 2];
+    if (rule && rule.min >= 3) return [1, 1, 1];
     const totalLimit = clamp(totalHenanLimit(score, subject), 1, 4);
     if (totalLimit === 1) return rotateHenanLimits(score, subject, [1, 0, 0], [0, 1, 0], [0, 0, 1]);
     if (totalLimit === 2) return rotateHenanLimits(score, subject, [1, 1, 0], [1, 0, 1], [0, 1, 1]);
     if (totalLimit === 3) return [1, 1, 1];
     return rotateHenanLimits(score, subject, [2, 1, 1], [1, 2, 1], [1, 1, 2]);
+}
+
+function henanFirstPageRule(score) {
+    if (score >= 160 && score <= 300) return { min: 5, max: 6 };
+    if (score > 300 && score <= 600) return { min: 3, max: 4 };
+    return null;
 }
 
 function totalHenanLimit(score, subject) {
@@ -631,28 +640,124 @@ function rotatedHenanBuckets(score, subject) {
 }
 
 function enforceHenanFirstPageRows(rows, score, subject) {
-    trimHenanFirstPageRows(rows);
-    if (countHenanFirstPageRows(rows) >= 1) return;
-    const used = new Set([...rows.rush, ...rows.stable, ...rows.safe].map(rowKey));
-    for (const bucket of rotatedHenanBuckets(score, subject)) {
-        const nearLineJuniorCollege = shouldUseQualityJuniorCollege(score, subject, bucket);
-        const allowUndergraduate = score >= undergraduateLine(subject) && !nearLineJuniorCollege;
-        const allowJuniorCollege = score < undergraduateLine(subject) || nearLineJuniorCollege;
-        const candidates = recommendBucket(score, subject, '河南', bucket, MAX_VISIBLE_ROWS);
-        for (const row of candidates) {
-            if (!row || !isHenan(row) || used.has(rowKey(row))) continue;
-            const target = rows[canonicalBucket(row, score)];
-            if (addOrReplaceHenanRow(target, row)) return;
+    const rule = henanFirstPageRule(score);
+    if (!rule) return;
+    const targetCount = targetHenanFirstPageCount(score, subject, rule);
+    ensureHenanBucketCoverage(rows, score, subject);
+    fillHenanFirstPageRows(rows, score, subject, targetCount);
+    trimHenanFirstPageRows(rows, rule.max);
+    ensureHenanBucketCoverage(rows, score, subject);
+    fillHenanFirstPageRows(rows, score, subject, targetCount);
+    trimHenanFirstPageRows(rows, rule.max);
+}
+
+function targetHenanFirstPageCount(score, subject, rule) {
+    const spread = rule.max - rule.min;
+    if (spread <= 0) return rule.min;
+    let seed = (score || 0) + recommendNonce;
+    if (subject === '物理') seed += 17;
+    return rule.min + (((seed % (spread + 1)) + (spread + 1)) % (spread + 1));
+}
+
+function ensureHenanBucketCoverage(rows, score, subject) {
+    const used = currentRowKeys(rows);
+    for (const config of henanBucketConfigs(score, subject)) {
+        if (rows[config.key].some(isHenan)) continue;
+        const candidate = findHenanCandidateForBucket(score, subject, config.bucket, used);
+        if (candidate && addOrReplaceHenanRow(rows[config.key], candidate, used, score, subject, config.key)) {
+            used.add(rowKey(candidate));
         }
     }
 }
 
-function trimHenanFirstPageRows(rows) {
+function fillHenanFirstPageRows(rows, score, subject, minCount) {
+    const used = currentRowKeys(rows);
     let count = countHenanFirstPageRows(rows);
-    if (count <= 4) return;
+    while (count < minCount) {
+        let changed = false;
+        for (const config of henanBucketConfigs(score, subject)) {
+            if (count >= minCount) return;
+            const candidate = findHenanCandidateForBucket(score, subject, config.bucket, used);
+            if (!candidate) continue;
+            if (addOrReplaceHenanRow(rows[config.key], candidate, used, score, subject, config.key)) {
+                used.add(rowKey(candidate));
+                count = countHenanFirstPageRows(rows);
+                changed = true;
+            }
+        }
+        if (!changed) return;
+    }
+}
+
+function henanBucketConfigs(score, subject) {
+    const configs = [
+        { key: 'rush', bucket: '冲刺' },
+        { key: 'stable', bucket: '稳妥' },
+        { key: 'safe', bucket: '保底' }
+    ];
+    const order = rotatedHenanBuckets(score, subject);
+    return order.map(bucket => configs.find(config => config.bucket === bucket)).filter(Boolean);
+}
+
+function findHenanCandidateForBucket(score, subject, bucket, used) {
+    const nearLineJuniorCollege = shouldUseQualityJuniorCollege(score, subject, bucket);
+    const allowUndergraduate = score >= undergraduateLine(subject) && !nearLineJuniorCollege;
+    const allowJuniorCollege = score < undergraduateLine(subject) || nearLineJuniorCollege;
+    const candidates = queryCandidatesWithFallback(score, subject, '河南', bucket, allowUndergraduate,
+        allowJuniorCollege, nearLineJuniorCollege, QUERY_LIMIT);
+    for (const row of candidates) {
+        if (isUsableHenanCandidate(row, used)) return row;
+    }
+    const fallbackBuckets = bucket === '冲刺'
+        ? ['冲刺高分兜底']
+        : (bucket === '稳妥' ? ['保底同省补足'] : ['保底扩展', '保底兜底', '保底同省补足']);
+    for (const fallbackBucket of fallbackBuckets) {
+        const fallback = queryCandidatesWithFallback(score, subject, '河南', fallbackBucket, allowUndergraduate,
+            allowJuniorCollege, nearLineJuniorCollege, QUERY_LIMIT);
+        for (const row of fallback) {
+            if (isUsableHenanCandidate(row, used)) return row;
+        }
+    }
+    for (const row of queryAnyHenanCandidates(score, subject)) {
+        if (isUsableHenanCandidate(row, used)) return row;
+    }
+    return null;
+}
+
+function queryAnyHenanCandidates(score, subject) {
+    const line = undergraduateLine(subject);
+    const juniorOnly = score < line + NEAR_UNDERGRADUATE_MARGIN;
+    return predictionLines
+        .filter(row => row.province === '河南')
+        .filter(row => row.subjectType === subject)
+        .filter(row => row.schoolProvince === '河南')
+        .filter(row => row.schoolProvince && row.schoolProvince !== '未识别')
+        .filter(row => row.majorDirection && row.majorDirection.trim() && !row.majorDirection.includes('未提供'))
+        .filter(row => row.majorCategory && row.majorCategory.trim() && !['理', '术', '技', '管理', '商务', '包含', '未提供', '专业', '验技术', '方向'].includes(row.majorCategory))
+        .filter(row => !juniorOnly || row.schoolLevel === '专科')
+        .sort((a, b) => {
+            const distance = Math.abs(scoreOf(a) - score) - Math.abs(scoreOf(b) - score);
+            if (distance !== 0) return distance;
+            return scoreOf(b) - scoreOf(a);
+        })
+        .slice(0, QUERY_LIMIT);
+}
+
+function isUsableHenanCandidate(row, used) {
+    return row && isHenan(row) && !used.has(rowKey(row));
+}
+
+function currentRowKeys(rows) {
+    return new Set([...rows.rush, ...rows.stable, ...rows.safe].map(rowKey));
+}
+
+function trimHenanFirstPageRows(rows, maxCount) {
+    let count = countHenanFirstPageRows(rows);
+    if (count <= maxCount) return;
     for (const bucket of ['safe', 'stable', 'rush']) {
-        for (let i = rows[bucket].length - 1; i >= 0 && count > 4; i--) {
+        for (let i = rows[bucket].length - 1; i >= 0 && count > maxCount; i--) {
             if (!isHenan(rows[bucket][i])) continue;
+            if (countHenanRows(rows[bucket]) <= 1) continue;
             rows[bucket].splice(i, 1);
             count--;
         }
@@ -663,18 +768,48 @@ function countHenanFirstPageRows(rows) {
     return [...rows.rush, ...rows.stable, ...rows.safe].filter(isHenan).length;
 }
 
-function addOrReplaceHenanRow(rows, candidate) {
+function countHenanRows(rows) {
+    return rows.filter(isHenan).length;
+}
+
+function addOrReplaceHenanRow(rows, candidate, used = new Set(), score = 0, subject = '', bucketKey = '') {
     if (!rows || !candidate) return false;
+    if (used.has(rowKey(candidate))) return false;
     if (rows.length < MAX_VISIBLE_ROWS) {
-        rows.push(candidate);
+        const slots = Array.from({ length: rows.length + 1 }, (_, index) => index);
+        rows.splice(naturalHenanIndex(slots, candidate, score, subject, bucketKey), 0, candidate);
         return true;
     }
-    for (let i = rows.length - 1; i >= 0; i--) {
-        if (isHenan(rows[i])) continue;
-        rows[i] = candidate;
-        return true;
-    }
-    return false;
+    const replaceableIndexes = rows
+        .map((row, index) => isHenan(row) ? -1 : index)
+        .filter(index => index >= 0);
+    if (!replaceableIndexes.length) return false;
+    rows[naturalHenanIndex(replaceableIndexes, candidate, score, subject, bucketKey)] = candidate;
+    return true;
+}
+
+function naturalHenanIndex(indexes, candidate, score, subject, bucketKey) {
+    const preferred = preferredHenanSlot(score, subject, bucketKey);
+    const tieBreak = seededOffset(`${score}|${subject}|${bucketKey}|${recommendNonce}|${rowKey(candidate)}`, indexes.length);
+    return indexes.slice().sort((a, b) => {
+        const distance = Math.abs(a - preferred) - Math.abs(b - preferred);
+        if (distance !== 0) return distance;
+        return ((a + tieBreak) % MAX_VISIBLE_ROWS) - ((b + tieBreak) % MAX_VISIBLE_ROWS);
+    })[0];
+}
+
+function preferredHenanSlot(score, subject, bucketKey) {
+    const patterns = {
+        rush: [1, 0, 2],
+        stable: [0, 2, 1],
+        safe: [2, 1, 0]
+    };
+    let seed = score || 0;
+    if (subject === '物理') seed += 17;
+    const plan = (((seed + recommendNonce) % MAX_VISIBLE_ROWS) + MAX_VISIBLE_ROWS) % MAX_VISIBLE_ROWS;
+    const slots = patterns[bucketKey];
+    if (slots) return slots[plan];
+    return plan;
 }
 
 function polishPrediction(row, score, bucket) {
