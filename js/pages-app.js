@@ -10,9 +10,20 @@ const NEAR_UNDERGRADUATE_MARGIN = 20;
 const STATIC_LOGIN_USER = 'admin';
 const STATIC_LOGIN_HASH = '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9';
 const STATIC_LOGIN_KEY = 'gaokao_pages_login_ok';
+const STATIC_LOGIN_ACCOUNT_KEY = 'gaokao_pages_login_account';
+const STATIC_LOGIN_SESSION_KEY = 'gaokao_pages_login_session_id';
+const STATIC_LOGIN_LOCK_PREFIX = 'gaokao_pages_login_lock:';
+const STATIC_LOGIN_LOCK_TTL = 12 * 60 * 60 * 1000;
+const STATIC_LOGIN_HEARTBEAT_MS = 15 * 1000;
 const STATIC_LOGIN_FALLBACK_USERS = [
     { username: STATIC_LOGIN_USER, passwordHash: STATIC_LOGIN_HASH }
 ];
+const MAJOR_TEXT_FIXES = new Map([
+    ['濮阳医学高等专科学校|历史|102', '中医学(大学生村医免费培养计划)'],
+    ['漯河医学高等专科学校|历史|102', '临床医学(大学生村医免费培养计划)'],
+    ['南阳医学高等专科学校|历史|103', '临床医学(大学生村医免费培养计划)'],
+    ['南阳医学高等专科学校|历史|104', '中医学(大学生村医免费培养计划)']
+]);
 const SCHOOL_PROVINCES = [
     '全部地区', '北京', '天津', '河北', '山西', '内蒙古',
     '辽宁', '吉林', '黑龙江', '上海', '江苏',
@@ -42,6 +53,7 @@ let appBooted = false;
 let recommendNonce = 0;
 let lastCriteriaKey = '';
 let staticLoginUsersPromise = null;
+let staticLoginHeartbeat = null;
 
 setupStaticLogin();
 
@@ -76,12 +88,19 @@ function setupStaticLogin() {
         return;
     }
 
-    const showLogin = () => {
+    const setLoginError = message => {
+        const error = $('loginError');
+        if (!error) return;
+        error.innerText = message || '';
+        error.hidden = !message;
+    };
+    const showLogin = message => {
         document.body.classList.add('locked');
         loginView.hidden = false;
         appView.hidden = true;
         const pass = $('loginPass');
         if (pass) pass.value = '';
+        setLoginError(message || '');
         setTimeout(() => $('loginUser') && $('loginUser').focus(), 0);
     };
     const showApp = () => {
@@ -93,22 +112,124 @@ function setupStaticLogin() {
 
     $('loginForm').addEventListener('submit', async event => {
         event.preventDefault();
-        const ok = await verifyStaticLogin($('loginUser').value.trim(), $('loginPass').value);
-        $('loginError').hidden = ok;
-        if (!ok) return;
-        sessionStorage.setItem(STATIC_LOGIN_KEY, '1');
+        const username = $('loginUser').value.trim();
+        const ok = await verifyStaticLogin(username, $('loginPass').value);
+        if (!ok) {
+            setLoginError('账号或密码错误，请重新输入。');
+            return;
+        }
+        if (isStaticAccountInUse(username)) {
+            setLoginError('该账号已在其他窗口登录，请先安全退出后再登录。');
+            return;
+        }
+        startStaticLoginSession(username);
+        setLoginError('');
         showApp();
     });
     $('staticLogout').addEventListener('click', () => {
-        sessionStorage.removeItem(STATIC_LOGIN_KEY);
+        endStaticLoginSession();
         showLogin();
     });
 
-    if (sessionStorage.getItem(STATIC_LOGIN_KEY) === '1') {
+    const storedUsername = sessionStorage.getItem(STATIC_LOGIN_ACCOUNT_KEY);
+    if (sessionStorage.getItem(STATIC_LOGIN_KEY) === '1' && storedUsername && !isStaticAccountInUse(storedUsername)) {
+        startStaticLoginSession(storedUsername);
         showApp();
     } else {
+        endStaticLoginSession(false);
         showLogin();
     }
+}
+
+function startStaticLoginSession(username) {
+    const normalizedUsername = normalizeStaticUsername(username);
+    sessionStorage.setItem(STATIC_LOGIN_KEY, '1');
+    sessionStorage.setItem(STATIC_LOGIN_ACCOUNT_KEY, normalizedUsername);
+    getStaticLoginSessionId();
+    refreshStaticAccountLock(normalizedUsername);
+    startStaticLoginHeartbeat(normalizedUsername);
+}
+
+function endStaticLoginSession(removeLock = true) {
+    const username = sessionStorage.getItem(STATIC_LOGIN_ACCOUNT_KEY);
+    if (removeLock && username) releaseStaticAccountLock(username);
+    clearStaticLoginHeartbeat();
+    sessionStorage.removeItem(STATIC_LOGIN_KEY);
+    sessionStorage.removeItem(STATIC_LOGIN_ACCOUNT_KEY);
+}
+
+function isStaticAccountInUse(username) {
+    const normalizedUsername = normalizeStaticUsername(username);
+    const lock = readStaticAccountLock(normalizedUsername);
+    return Boolean(lock && lock.sessionId !== getStaticLoginSessionId());
+}
+
+function refreshStaticAccountLock(username) {
+    const normalizedUsername = normalizeStaticUsername(username);
+    if (!normalizedUsername) return;
+    const now = Date.now();
+    localStorage.setItem(staticAccountLockKey(normalizedUsername), JSON.stringify({
+        username: normalizedUsername,
+        sessionId: getStaticLoginSessionId(),
+        updatedAt: now,
+        expiresAt: now + STATIC_LOGIN_LOCK_TTL
+    }));
+}
+
+function releaseStaticAccountLock(username) {
+    const normalizedUsername = normalizeStaticUsername(username);
+    const lock = readStaticAccountLock(normalizedUsername);
+    if (lock && lock.sessionId === getStaticLoginSessionId()) {
+        localStorage.removeItem(staticAccountLockKey(normalizedUsername));
+    }
+}
+
+function readStaticAccountLock(username) {
+    const normalizedUsername = normalizeStaticUsername(username);
+    if (!normalizedUsername) return null;
+    try {
+        const value = localStorage.getItem(staticAccountLockKey(normalizedUsername));
+        if (!value) return null;
+        const lock = JSON.parse(value);
+        if (!lock || !lock.sessionId || Number(lock.expiresAt || 0) <= Date.now()) {
+            localStorage.removeItem(staticAccountLockKey(normalizedUsername));
+            return null;
+        }
+        return lock;
+    } catch (error) {
+        localStorage.removeItem(staticAccountLockKey(normalizedUsername));
+        return null;
+    }
+}
+
+function startStaticLoginHeartbeat(username) {
+    clearStaticLoginHeartbeat();
+    staticLoginHeartbeat = setInterval(() => refreshStaticAccountLock(username), STATIC_LOGIN_HEARTBEAT_MS);
+}
+
+function clearStaticLoginHeartbeat() {
+    if (!staticLoginHeartbeat) return;
+    clearInterval(staticLoginHeartbeat);
+    staticLoginHeartbeat = null;
+}
+
+function getStaticLoginSessionId() {
+    let sessionId = sessionStorage.getItem(STATIC_LOGIN_SESSION_KEY);
+    if (!sessionId) {
+        sessionId = window.crypto && window.crypto.randomUUID
+            ? window.crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        sessionStorage.setItem(STATIC_LOGIN_SESSION_KEY, sessionId);
+    }
+    return sessionId;
+}
+
+function normalizeStaticUsername(username) {
+    return String(username || '').trim().toLowerCase();
+}
+
+function staticAccountLockKey(username) {
+    return `${STATIC_LOGIN_LOCK_PREFIX}${normalizeStaticUsername(username)}`;
 }
 
 function bootApp() {
@@ -845,7 +966,7 @@ function section(type, word, title, desc, rows) {
         body = `<table class="recommend-table"><thead><tr><th>院校/专业组</th><th>专业</th><th>学校地区</th></tr></thead><tbody>`
             + rows.map(r => `<tr>
                 <td><div class="school-name">${escapeHtml(r.schoolName)} ${escapeHtml(r.majorGroup || '')}组</div><div class="sub-info">${escapeHtml(r.schoolType || '')} · ${escapeHtml(r.schoolLevel || '')} · 河南考生</div></td>
-                <td class="major-cell">${renderMajorList(r.majorDirection || r.majorCategory || '')}</td>
+                <td class="major-cell">${renderMajorList(resolveMajorText(r))}</td>
                 <td>${escapeHtml(r.schoolProvince || '')}</td>
             </tr>`).join('') + '</tbody></table>';
     }
@@ -854,16 +975,32 @@ function section(type, word, title, desc, rows) {
 
 function renderMajorList(value) {
     const text = normalizeMajorName(String(value == null ? '' : value).trim());
-    if (!text) return '';
-    const parts = text.split(/[、,，;；]/).map(v => normalizeMajorName(v.trim())).filter(Boolean);
+    if (!isRenderableMajorText(text)) return '';
+    const parts = text.split(/[、,，;；]/).map(v => normalizeMajorName(v.trim())).filter(isRenderableMajorText);
     if (parts.length <= 1) return `<span class="major-text">${escapeHtml(text)}</span>`;
     const visibleParts = parts.slice(0, 3);
     const suffix = parts.length > 3 ? '<span class="major-chip more">等</span>' : '';
     return `<div class="major-list">${visibleParts.map(v => `<span class="major-chip">${escapeHtml(v)}</span>`).join('')}${suffix}</div>`;
 }
 
+function resolveMajorText(row) {
+    const fixed = MAJOR_TEXT_FIXES.get(`${row.schoolName}|${row.subjectType}|${row.majorGroup}`);
+    const candidates = [row.majorDirection, row.majorCategory]
+        .map(value => normalizeMajorName(String(value || '').trim()))
+        .filter(isRenderableMajorText);
+    if (candidates.length) return candidates[0];
+    return fixed || '';
+}
+
 function normalizeMajorName(value) {
     return value
+        .replace(/^划[)）]?$/, '')
+        .replace(/^中压学/, '中医学')
+        .replace(/^格床医学/, '临床医学')
+        .replace(/竹医/g, '村医')
+        .replace(/免赀/g, '免费')
+        .replace(/诗划/g, '计划')
+        .replace(/培养计划$/, '培养计划)')
         .replace(/^锁经营与管理$/, '连锁经营与管理')
         .replace(/^件技术/, '软件技术')
         .replace(/^字媒体技术/, '数字媒体技术')
@@ -879,6 +1016,14 @@ function normalizeMajorName(value) {
         .replace(/^术应用$/, '云计算技术应用')
         .replace(/置播电/g, '直播电商')
         .replace(/管、理与服务/g, '管理与服务');
+}
+
+function isRenderableMajorText(value) {
+    const text = String(value || '').trim();
+    if (!text) return false;
+    if (/^划[)）]?$/.test(text)) return false;
+    if (/^[)）]+$/.test(text)) return false;
+    return true;
 }
 
 function undergraduateLine(subject) {
