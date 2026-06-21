@@ -11,13 +11,14 @@ const STATIC_LOGIN_USER = 'admin';
 const STATIC_LOGIN_HASH = '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9';
 const STATIC_LOGIN_KEY = 'gaokao_pages_login_ok';
 const STATIC_LOGIN_ACCOUNT_KEY = 'gaokao_pages_login_account';
-const STATIC_LOGIN_SESSION_KEY = 'gaokao_pages_login_session_id';
-const STATIC_LOGIN_LOCK_PREFIX = 'gaokao_pages_login_lock:';
-const STATIC_LOGIN_LOCK_TTL = 12 * 60 * 60 * 1000;
-const STATIC_LOGIN_HEARTBEAT_MS = 15 * 1000;
+const STATIC_LOGIN_SESSIONS_PREFIX = 'gaokao_pages_login_sessions:';
+const STATIC_LOGIN_MAX_ACTIVE_SESSIONS = 2;
+const STATIC_LOGIN_SESSION_TTL = 2 * 60 * 1000;
+const STATIC_LOGIN_HEARTBEAT_MS = 10 * 1000;
 const STATIC_LOGIN_FALLBACK_USERS = [
     { username: STATIC_LOGIN_USER, passwordHash: STATIC_LOGIN_HASH }
 ];
+const STATIC_LOGIN_INSTANCE_ID = createStaticLoginInstanceId();
 const MAJOR_TEXT_FIXES = new Map([
     ['濮阳医学高等专科学校|历史|102', '中医学(大学生村医免费培养计划)'],
     ['漯河医学高等专科学校|历史|102', '临床医学(大学生村医免费培养计划)'],
@@ -54,6 +55,7 @@ let recommendNonce = 0;
 let lastCriteriaKey = '';
 let staticLoginUsersPromise = null;
 let staticLoginHeartbeat = null;
+let staticLoginAutoReleaseBound = false;
 
 setupStaticLogin();
 
@@ -118,8 +120,8 @@ function setupStaticLogin() {
             setLoginError('账号或密码错误，请重新输入。');
             return;
         }
-        if (isStaticAccountInUse(username)) {
-            setLoginError('该账号已在其他窗口登录，请先安全退出后再登录。');
+        if (!hasStaticLoginCapacity(username)) {
+            setLoginError('该账号已达到 2 个设备在线，请先退出其中一个后再登录。');
             return;
         }
         startStaticLoginSession(username);
@@ -132,79 +134,97 @@ function setupStaticLogin() {
     });
 
     const storedUsername = sessionStorage.getItem(STATIC_LOGIN_ACCOUNT_KEY);
-    if (sessionStorage.getItem(STATIC_LOGIN_KEY) === '1' && storedUsername && !isStaticAccountInUse(storedUsername)) {
+    if (sessionStorage.getItem(STATIC_LOGIN_KEY) === '1' && storedUsername && hasStaticLoginCapacity(storedUsername)) {
         startStaticLoginSession(storedUsername);
         showApp();
     } else {
         endStaticLoginSession(false);
         showLogin();
     }
+    bindStaticLoginAutoRelease(showLogin);
 }
 
 function startStaticLoginSession(username) {
     const normalizedUsername = normalizeStaticUsername(username);
     sessionStorage.setItem(STATIC_LOGIN_KEY, '1');
     sessionStorage.setItem(STATIC_LOGIN_ACCOUNT_KEY, normalizedUsername);
-    getStaticLoginSessionId();
-    refreshStaticAccountLock(normalizedUsername);
+    refreshStaticLoginSession(normalizedUsername);
     startStaticLoginHeartbeat(normalizedUsername);
 }
 
-function endStaticLoginSession(removeLock = true) {
+function endStaticLoginSession(removeSession = true) {
     const username = sessionStorage.getItem(STATIC_LOGIN_ACCOUNT_KEY);
-    if (removeLock && username) releaseStaticAccountLock(username);
+    if (removeSession && username) releaseStaticLoginSession(username);
     clearStaticLoginHeartbeat();
     sessionStorage.removeItem(STATIC_LOGIN_KEY);
     sessionStorage.removeItem(STATIC_LOGIN_ACCOUNT_KEY);
 }
 
-function isStaticAccountInUse(username) {
+function hasStaticLoginCapacity(username) {
     const normalizedUsername = normalizeStaticUsername(username);
-    const lock = readStaticAccountLock(normalizedUsername);
-    return Boolean(lock && lock.sessionId !== getStaticLoginSessionId());
+    const sessions = readStaticLoginSessions(normalizedUsername);
+    if (sessions.some(session => session.sessionId === getStaticLoginSessionId())) return true;
+    return sessions.length < STATIC_LOGIN_MAX_ACTIVE_SESSIONS;
 }
 
-function refreshStaticAccountLock(username) {
+function refreshStaticLoginSession(username) {
+    const normalizedUsername = normalizeStaticUsername(username);
+    if (!normalizedUsername) return false;
+    const sessions = readStaticLoginSessions(normalizedUsername);
+    const currentSessionId = getStaticLoginSessionId();
+    const otherSessions = sessions.filter(session => session.sessionId !== currentSessionId);
+    if (otherSessions.length >= STATIC_LOGIN_MAX_ACTIVE_SESSIONS) return false;
+    const now = Date.now();
+    writeStaticLoginSessions(normalizedUsername, otherSessions.concat({
+        username: normalizedUsername,
+        sessionId: currentSessionId,
+        updatedAt: now,
+        expiresAt: now + STATIC_LOGIN_SESSION_TTL
+    }));
+    return true;
+}
+
+function releaseStaticLoginSession(username) {
+    const normalizedUsername = normalizeStaticUsername(username);
+    const currentSessionId = getStaticLoginSessionId();
+    const sessions = readStaticLoginSessions(normalizedUsername)
+        .filter(session => session.sessionId !== currentSessionId);
+    writeStaticLoginSessions(normalizedUsername, sessions);
+}
+
+function readStaticLoginSessions(username) {
+    const normalizedUsername = normalizeStaticUsername(username);
+    if (!normalizedUsername) return [];
+    try {
+        const value = localStorage.getItem(staticAccountSessionsKey(normalizedUsername));
+        if (!value) return [];
+        const parsed = JSON.parse(value);
+        const sessions = Array.isArray(parsed) ? parsed : [];
+        const now = Date.now();
+        const activeSessions = sessions.filter(session => session && session.sessionId && Number(session.expiresAt || 0) > now);
+        if (activeSessions.length !== sessions.length) {
+            writeStaticLoginSessions(normalizedUsername, activeSessions);
+        }
+        return activeSessions;
+    } catch (error) {
+        localStorage.removeItem(staticAccountSessionsKey(normalizedUsername));
+        return [];
+    }
+}
+
+function writeStaticLoginSessions(username, sessions) {
     const normalizedUsername = normalizeStaticUsername(username);
     if (!normalizedUsername) return;
-    const now = Date.now();
-    localStorage.setItem(staticAccountLockKey(normalizedUsername), JSON.stringify({
-        username: normalizedUsername,
-        sessionId: getStaticLoginSessionId(),
-        updatedAt: now,
-        expiresAt: now + STATIC_LOGIN_LOCK_TTL
-    }));
-}
-
-function releaseStaticAccountLock(username) {
-    const normalizedUsername = normalizeStaticUsername(username);
-    const lock = readStaticAccountLock(normalizedUsername);
-    if (lock && lock.sessionId === getStaticLoginSessionId()) {
-        localStorage.removeItem(staticAccountLockKey(normalizedUsername));
+    if (!sessions.length) {
+        localStorage.removeItem(staticAccountSessionsKey(normalizedUsername));
+        return;
     }
-}
-
-function readStaticAccountLock(username) {
-    const normalizedUsername = normalizeStaticUsername(username);
-    if (!normalizedUsername) return null;
-    try {
-        const value = localStorage.getItem(staticAccountLockKey(normalizedUsername));
-        if (!value) return null;
-        const lock = JSON.parse(value);
-        if (!lock || !lock.sessionId || Number(lock.expiresAt || 0) <= Date.now()) {
-            localStorage.removeItem(staticAccountLockKey(normalizedUsername));
-            return null;
-        }
-        return lock;
-    } catch (error) {
-        localStorage.removeItem(staticAccountLockKey(normalizedUsername));
-        return null;
-    }
+    localStorage.setItem(staticAccountSessionsKey(normalizedUsername), JSON.stringify(sessions));
 }
 
 function startStaticLoginHeartbeat(username) {
     clearStaticLoginHeartbeat();
-    staticLoginHeartbeat = setInterval(() => refreshStaticAccountLock(username), STATIC_LOGIN_HEARTBEAT_MS);
+    staticLoginHeartbeat = setInterval(() => refreshStaticLoginSession(username), STATIC_LOGIN_HEARTBEAT_MS);
 }
 
 function clearStaticLoginHeartbeat() {
@@ -214,22 +234,32 @@ function clearStaticLoginHeartbeat() {
 }
 
 function getStaticLoginSessionId() {
-    let sessionId = sessionStorage.getItem(STATIC_LOGIN_SESSION_KEY);
-    if (!sessionId) {
-        sessionId = window.crypto && window.crypto.randomUUID
-            ? window.crypto.randomUUID()
-            : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        sessionStorage.setItem(STATIC_LOGIN_SESSION_KEY, sessionId);
-    }
-    return sessionId;
+    return STATIC_LOGIN_INSTANCE_ID;
+}
+
+function createStaticLoginInstanceId() {
+    return window.crypto && window.crypto.randomUUID
+        ? window.crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function normalizeStaticUsername(username) {
     return String(username || '').trim().toLowerCase();
 }
 
-function staticAccountLockKey(username) {
-    return `${STATIC_LOGIN_LOCK_PREFIX}${normalizeStaticUsername(username)}`;
+function staticAccountSessionsKey(username) {
+    return `${STATIC_LOGIN_SESSIONS_PREFIX}${normalizeStaticUsername(username)}`;
+}
+
+function bindStaticLoginAutoRelease(showLogin) {
+    if (staticLoginAutoReleaseBound) return;
+    staticLoginAutoReleaseBound = true;
+    const releaseCurrentPageLogin = () => endStaticLoginSession();
+    window.addEventListener('pagehide', releaseCurrentPageLogin);
+    window.addEventListener('beforeunload', releaseCurrentPageLogin);
+    window.addEventListener('pageshow', event => {
+        if (event.persisted && sessionStorage.getItem(STATIC_LOGIN_KEY) !== '1') showLogin();
+    });
 }
 
 function bootApp() {
