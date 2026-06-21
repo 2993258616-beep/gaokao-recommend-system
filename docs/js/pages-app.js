@@ -372,12 +372,24 @@ function renderRecommend() {
     }
     $('tagSubject').innerText = subjectType + '类';
     $('tagProvince').innerText = schoolProvince;
-    $('summaryText').innerText = `按历史录取数据参考：河南${subjectType}类，预估 ${score} 分，筛选条件为学校地区：${schoolProvince}，第 ${recommendNonce + 1} 批。`;
 
-    const rows = recommend(score, subjectType, schoolProvince);
+    let rows = recommend(score, subjectType, schoolProvince);
+    if (recommendNonce > 0 && !hasRecommendationRows(rows)) {
+        recommendNonce = 0;
+        rows = recommend(score, subjectType, schoolProvince);
+    }
+    renderSummaryText(score, schoolProvince);
     $('resultArea').innerHTML = section('rush', '冲', '冲刺推荐', '适合略高于当前分数的院校', rows.rush)
         + section('stable', '稳', '稳妥推荐', '适合重点考虑的匹配院校', rows.stable)
         + section('safe', '保', '保底推荐', '适合保底填报的院校', rows.safe);
+}
+
+function renderSummaryText(score, schoolProvince) {
+    $('summaryText').innerText = `按历史录取数据参考：河南${subjectType}类，预估 ${score} 分，筛选条件为学校地区：${schoolProvince}，第 ${recommendNonce + 1} 批。`;
+}
+
+function hasRecommendationRows(rows) {
+    return Boolean(rows && ['rush', 'stable', 'safe'].some(bucket => Array.isArray(rows[bucket]) && rows[bucket].length));
 }
 
 function recommend(score, subject, schoolProvince) {

@@ -57,9 +57,34 @@ function renderRecommend() {
     }
     $('tagSubject').innerText = subjectType + '类';
     $('tagProvince').innerText = schoolProvince;
-    $('summaryText').innerText = `按历史录取数据参考：河南${subjectType}类，预估 ${score} 分，筛选条件为学校地区：${schoolProvince}。`;
+    renderSummaryText(score, schoolProvince);
 
-    fetch(`/api/recommend?score=${encodeURIComponent(score)}&subjectType=${encodeURIComponent(subjectType)}&schoolProvince=${encodeURIComponent(schoolProvince)}&nonce=${encodeURIComponent(recommendNonce)}`, {
+    fetchRecommendRows(score, schoolProvince, recommendNonce)
+        .then(rows => {
+            if (recommendNonce > 0 && !hasRecommendationRows(rows)) {
+                recommendNonce = 0;
+                renderSummaryText(score, schoolProvince);
+                return fetchRecommendRows(score, schoolProvince, recommendNonce);
+            }
+            return rows;
+        })
+        .then(rows => {
+            const html = section('rush', '冲', '冲刺推荐', '适合略高于当前分数的院校', rows.rush)
+                + section('stable', '稳', '稳妥推荐', '适合重点考虑的匹配院校', rows.stable)
+                + section('safe', '保', '保底推荐', '适合保底填报的院校', rows.safe);
+            $('resultArea').innerHTML = html;
+        })
+        .catch(err => {
+            $('resultArea').innerHTML = `<div class="empty">加载失败：${escapeHtml(err.message)}</div>`;
+        });
+}
+
+function renderSummaryText(score, schoolProvince) {
+    $('summaryText').innerText = `按历史录取数据参考：河南${subjectType}类，预估 ${score} 分，筛选条件为学校地区：${schoolProvince}，第 ${recommendNonce + 1} 批。`;
+}
+
+function fetchRecommendRows(score, schoolProvince, nonce) {
+    return fetch(`/api/recommend?score=${encodeURIComponent(score)}&subjectType=${encodeURIComponent(subjectType)}&schoolProvince=${encodeURIComponent(schoolProvince)}&nonce=${encodeURIComponent(nonce)}`, {
         credentials: 'same-origin',
         cache: 'no-store'
     })
@@ -73,15 +98,12 @@ function renderRecommend() {
         })
         .then(data => {
             const scoreValue = Number(score) || 500;
-            const rows = normalizeRecommendRows(data, scoreValue);
-            const html = section('rush', '冲', '冲刺推荐', '适合略高于当前分数的院校', rows.rush)
-                + section('stable', '稳', '稳妥推荐', '适合重点考虑的匹配院校', rows.stable)
-                + section('safe', '保', '保底推荐', '适合保底填报的院校', rows.safe);
-            $('resultArea').innerHTML = html;
-        })
-        .catch(err => {
-            $('resultArea').innerHTML = `<div class="empty">加载失败：${escapeHtml(err.message)}</div>`;
+            return normalizeRecommendRows(data, scoreValue);
         });
+}
+
+function hasRecommendationRows(rows) {
+    return Boolean(rows && ['rush', 'stable', 'safe'].some(bucket => Array.isArray(rows[bucket]) && rows[bucket].length));
 }
 
 function section(type, word, title, desc, rows) {
