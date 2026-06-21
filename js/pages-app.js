@@ -1026,12 +1026,29 @@ function section(type, word, title, desc, rows) {
     } else {
         body = `<table class="recommend-table"><thead><tr><th>院校/专业组</th><th>专业</th><th>学校地区</th></tr></thead><tbody>`
             + rows.map(r => `<tr>
-                <td><div class="school-name">${escapeHtml(r.schoolName)} ${escapeHtml(r.majorGroup || '')}组</div><div class="sub-info">${escapeHtml(r.schoolType || '')} · ${escapeHtml(r.schoolLevel || '')} · 河南考生</div></td>
+                <td><div class="school-name">${escapeHtml(displaySchoolName(r))} ${escapeHtml(r.majorGroup || '')}组</div><div class="sub-info">${escapeHtml(r.schoolType || '')} · ${escapeHtml(displaySchoolLevel(r))} · 河南考生</div></td>
                 <td class="major-cell">${renderMajorList(resolveMajorText(r))}</td>
                 <td>${escapeHtml(r.schoolProvince || '')}</td>
             </tr>`).join('') + '</tbody></table>';
     }
     return `<div class="block ${type}"><div class="block-side"><div class="round">${word}</div><h2>${title}</h2><p>${desc}</p></div><div class="table-wrap">${body}</div></div>`;
+}
+
+function displaySchoolName(row) {
+    if (row.schoolName === '河南理工大学' && row.schoolLevel === '专科') {
+        return '河南理工大学（民政学院·专科批）';
+    }
+    if (row.schoolName === '平顶山学院' && row.schoolLevel === '专科') {
+        return '平顶山学院（医药科技学院·专科批）';
+    }
+    return row.schoolName || '';
+}
+
+function displaySchoolLevel(row) {
+    if (row.schoolLevel === '专科' && ['河南理工大学', '平顶山学院'].includes(row.schoolName)) {
+        return '专科批';
+    }
+    return row.schoolLevel || '';
 }
 
 function renderMajorList(value) {
