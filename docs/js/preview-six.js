@@ -35,14 +35,49 @@ const VOCATIONAL_SCHOOL_WORDS = [
     '职业', '技术', '高等专科', '专科学校', '职工大学',
     '开放大学', '广播电视大学', '技师', '干部'
 ];
+const BASE_PROVINCE = '河南';
+const PROVINCE_SCORE_SCALE = 0.82;
 const SCHOOL_PROVINCES = [
-    '全部地区', '北京', '天津', '河北', '山西', '内蒙古',
+    '河南', '北京', '天津', '河北', '山西', '内蒙古',
     '辽宁', '吉林', '黑龙江', '上海', '江苏',
     '浙江', '安徽', '福建', '江西', '山东',
-    '河南', '湖北', '湖南', '广东', '广西',
+    '湖北', '湖南', '广东', '广西',
     '海南', '重庆', '四川', '贵州', '云南',
     '西藏', '陕西', '甘肃', '青海', '宁夏', '新疆'
 ];
+const PROVINCE_CONTROL_LINES = {
+    河南: { 历史: 471, 物理: 427 },
+    北京: { 历史: 430, 物理: 430 },
+    天津: { 历史: 476, 物理: 476 },
+    河北: { 历史: 477, 物理: 459 },
+    山西: { 历史: 443, 物理: 419 },
+    内蒙古: { 历史: 418, 物理: 375 },
+    辽宁: { 历史: 437, 物理: 367 },
+    吉林: { 历史: 384, 物理: 340 },
+    黑龙江: { 历史: 405, 物理: 360 },
+    上海: { 历史: 402, 物理: 402 },
+    江苏: { 历史: 482, 物理: 463 },
+    浙江: { 历史: 490, 物理: 490 },
+    安徽: { 历史: 477, 物理: 461 },
+    福建: { 历史: 450, 物理: 441 },
+    江西: { 历史: 486, 物理: 429 },
+    山东: { 历史: 441, 物理: 441 },
+    湖北: { 历史: 442, 物理: 426 },
+    湖南: { 历史: 446, 物理: 405 },
+    广东: { 历史: 464, 物理: 436 },
+    广西: { 历史: 402, 物理: 370 },
+    海南: { 历史: 480, 物理: 480 },
+    重庆: { 历史: 438, 物理: 425 },
+    四川: { 历史: 467, 物理: 438 },
+    贵州: { 历史: 458, 物理: 387 },
+    云南: { 历史: 465, 物理: 430 },
+    西藏: { 历史: 315, 物理: 305 },
+    陕西: { 历史: 414, 物理: 394 },
+    甘肃: { 历史: 412, 物理: 374 },
+    青海: { 历史: 405, 物理: 350 },
+    宁夏: { 历史: 404, 物理: 372 },
+    新疆: { 历史: 330, 物理: 280 }
+};
 const ELECTIVE_DEFAULTS_BY_SUBJECT = { 历史: ['政治', '地理'], 物理: ['化学', '生物'] };
 const ELECTIVE_OPTIONS = ['化学', '生物', '政治', '地理'];
 const NATIONAL_PROVINCE_OFFSETS = {
@@ -362,6 +397,7 @@ function renderProvinceOptions() {
     $('schoolProvince').innerHTML = SCHOOL_PROVINCES
         .map(p => `<option value="${escapeHtml(p)}">${escapeHtml(displayProvinceName(p))}</option>`)
         .join('');
+    $('schoolProvince').value = BASE_PROVINCE;
 }
 
 function updateSubjectControls() {
@@ -406,7 +442,25 @@ function selectedElectiveText() {
 }
 
 function displayProvinceName(province) {
-    return province === '全部地区' ? '全部省份' : province;
+    return province || BASE_PROVINCE;
+}
+
+function provinceLine(subject, province) {
+    const item = PROVINCE_CONTROL_LINES[province] || PROVINCE_CONTROL_LINES[BASE_PROVINCE];
+    return subject === '物理' ? item.物理 : item.历史;
+}
+
+function toBaseScore(score, subject, candidateProvince) {
+    const selectedLine = provinceLine(subject, candidateProvince);
+    const baseLine = provinceLine(subject, BASE_PROVINCE);
+    const diff = Number(score || 0) - selectedLine;
+    return clamp(Math.round(baseLine + diff * PROVINCE_SCORE_SCALE), 100, 750);
+}
+
+function provinceScoreMeta(score, subject, candidateProvince, baseScore) {
+    if (!candidateProvince || candidateProvince === BASE_PROVINCE) return '';
+    const line = provinceLine(subject, candidateProvince);
+    return `，按${candidateProvince}本科线约 ${line} 分估算，折算参考 ${baseScore} 分`;
 }
 
 function resetPlanAndRender() {
@@ -418,16 +472,17 @@ function resetPlanAndRender() {
 
 function getCurrentCriteriaKey() {
     const score = Number($('score').value || 500);
-    const schoolProvince = $('schoolProvince').value || '全部地区';
-    return `${score}|${subjectType}|${selectedElectiveText()}|${schoolProvince}`;
+    const candidateProvince = $('schoolProvince').value || BASE_PROVINCE;
+    return `${score}|${subjectType}|${selectedElectiveText()}|${candidateProvince}`;
 }
 
 function renderRecommend() {
     if (!predictionLines.length) return;
 
     const score = Number($('score').value || 500);
-    const schoolProvince = $('schoolProvince').value || '全部地区';
-    const criteriaKey = `${score}|${subjectType}|${selectedElectiveText()}|${schoolProvince}`;
+    const candidateProvince = $('schoolProvince').value || BASE_PROVINCE;
+    const baseScore = toBaseScore(score, subjectType, candidateProvince);
+    const criteriaKey = `${score}|${subjectType}|${selectedElectiveText()}|${candidateProvince}`;
     if (criteriaKey !== lastCriteriaKey) {
         recommendNonce = 0;
         lastCriteriaKey = criteriaKey;
@@ -435,21 +490,22 @@ function renderRecommend() {
     }
     $('tagSubject').innerText = subjectType + '组';
     $('tagElective').innerText = selectedElectiveText();
-    $('tagProvince').innerText = displayProvinceName(schoolProvince);
+    $('tagProvince').innerText = displayProvinceName(candidateProvince);
 
-    let rows = recommend(score, subjectType, schoolProvince);
-    if (shouldResetRecommendationBatch(rows, schoolProvince)) {
+    let rows = recommend(baseScore, subjectType, candidateProvince);
+    if (shouldResetRecommendationBatch(rows, candidateProvince)) {
         recommendNonce = 0;
-        rows = recommend(score, subjectType, schoolProvince);
+        rows = recommend(baseScore, subjectType, candidateProvince);
     }
-    renderSummaryText(score, schoolProvince);
+    renderSummaryText(score, candidateProvince, baseScore);
     $('resultArea').innerHTML = section('rush', '冲', '冲刺推荐', '适合略高于当前分数的院校', rows.rush)
         + section('stable', '稳', '稳妥推荐', '适合重点考虑的匹配院校', rows.stable)
         + section('safe', '保', '保底推荐', '适合保底填报的院校', rows.safe);
 }
 
-function renderSummaryText(score, schoolProvince) {
-    $('summaryText').innerText = `按全国历年录取与外省录取估算参考：${subjectType}组（${selectedElectiveText()}），预估 ${score} 分，筛选省份：${displayProvinceName(schoolProvince)}，第 ${recommendNonce + 1} 批。`;
+function renderSummaryText(score, candidateProvince, baseScore) {
+    const meta = provinceScoreMeta(score, subjectType, candidateProvince, baseScore);
+    $('summaryText').innerText = `按${displayProvinceName(candidateProvince)}当前录取规则估算：${subjectType}组（${selectedElectiveText()}），预估 ${score} 分${meta}，匹配全国院校，第 ${recommendNonce + 1} 批。`;
 }
 
 function hasRecommendationRows(rows) {
@@ -458,9 +514,7 @@ function hasRecommendationRows(rows) {
 
 function shouldResetRecommendationBatch(rows, schoolProvince) {
     if (recommendNonce <= 0) return false;
-    if (!hasRecommendationRows(rows)) return true;
-    if (!schoolProvince || schoolProvince === '全部地区') return false;
-    return !hasMeaningfulRegionalBatch(rows);
+    return !hasRecommendationRows(rows);
 }
 
 function hasMeaningfulRegionalBatch(rows) {
@@ -478,7 +532,7 @@ function recommend(score, subject, schoolProvince) {
 
     const used = new Map();
     const rushRows = takeUniqueRows(varyCandidateOrder(rushCandidates, score, subject, schoolProvince, '冲刺'), used, previousBatchKeys);
-    const allRegions = !schoolProvince || schoolProvince === '全部地区';
+    const allRegions = true;
     let stableRows;
     let safeRows;
     if (allRegions) {
@@ -517,7 +571,7 @@ function previousRecommendationKeys(score, subject, schoolProvince, rushCandidat
 }
 
 function recommendBucket(score, subject, schoolProvince, bucket, preferredHenanCount) {
-    const allRegions = !schoolProvince || schoolProvince === '全部地区';
+    const allRegions = true;
     const nearLineJuniorCollege = shouldUseQualityJuniorCollege(score, subject, bucket);
     const allowUndergraduate = score >= undergraduateLine(subject) && !nearLineJuniorCollege;
     const allowJuniorCollege = score < undergraduateLine(subject) || nearLineJuniorCollege;
@@ -692,13 +746,11 @@ function queryCandidatesWithFallback(score, subject, schoolProvince, bucket, all
 }
 
 function queryCandidates(score, subject, schoolProvince, bucket, allowUndergraduate, allowJuniorCollege, preferQualityJuniorCollege, limit) {
-    const allRegions = !schoolProvince || schoolProvince === '全部地区';
     const line = undergraduateLine(subject);
     const [low, high] = scoreBand(score, bucket, allowUndergraduate, allowJuniorCollege, line);
 
     return predictionLines
         .filter(row => row.subjectType === subject)
-        .filter(row => allRegions || row.schoolProvince === schoolProvince)
         .filter(row => row.schoolProvince && row.schoolProvince !== '未识别')
         .filter(row => row.majorDirection && row.majorDirection.trim() && !row.majorDirection.includes('未提供'))
         .filter(row => row.majorCategory && row.majorCategory.trim() && !['理', '术', '技', '管理', '商务', '包含', '未提供', '专业', '验技术', '方向'].includes(row.majorCategory))
@@ -707,7 +759,7 @@ function queryCandidates(score, subject, schoolProvince, bucket, allowUndergradu
         .filter(row => allowJuniorCollege || row.schoolLevel !== '专科')
         .filter(row => !allowUndergraduate || allowJuniorCollege || row.schoolLevel === '本科')
         .filter(row => allowUndergraduate || !allowJuniorCollege || row.schoolLevel === '专科')
-        .map(toNationalCandidate)
+        .map(row => toNationalCandidate(row, schoolProvince))
         .filter(row => {
             if (!allowUndergraduate && allowJuniorCollege) {
                 return scoreOf(row) <= line + 25 && row.predictScore <= line + 25;
@@ -722,11 +774,11 @@ function queryCandidates(score, subject, schoolProvince, bucket, allowUndergradu
         .slice(0, Math.max(1, Math.min(limit, 30)));
 }
 
-function toNationalCandidate(row) {
+function toNationalCandidate(row, candidateProvince = BASE_PROVINCE) {
     const copy = { ...row };
-    const delta = nationalAdmissionAdjustment(copy);
+    const delta = nationalAdmissionAdjustment(copy, candidateProvince);
     copy.nationalDelta = delta;
-    copy.nationalEstimateLabel = copy.schoolProvince === '河南' ? '全国录取参考' : '外省录取估算';
+    copy.nationalEstimateLabel = copy.schoolProvince === candidateProvince ? '本省录取参考' : '外省录取估算';
     copy.filingScore = clamp(Math.round(Number(copy.filingScore || copy.predictScore || 0) + delta), 0, 750);
     copy.predictScore = clamp(Math.round(Number(copy.predictScore || copy.filingScore || 0) + delta), 0, 750);
     copy.predictLow = clamp(Math.round(Number(copy.predictLow || copy.predictScore - 6) + delta), 0, 750);
@@ -736,8 +788,9 @@ function toNationalCandidate(row) {
     return copy;
 }
 
-function nationalAdmissionAdjustment(row) {
+function nationalAdmissionAdjustment(row, candidateProvince = BASE_PROVINCE) {
     let delta = Number(NATIONAL_PROVINCE_OFFSETS[row.schoolProvince] || 0);
+    if (row.schoolProvince === candidateProvince) delta = Math.round(delta * 0.35);
     if (row.schoolLevel === '专科') delta = Math.round(delta * 0.5);
     const text = [row.schoolName, row.majorGroupFull, row.majorDirection, row.majorCategory].filter(Boolean).join('');
     if (subjectType === '物理' && !selectedElectives.includes('化学')
@@ -1133,7 +1186,7 @@ function displayBoost(row) {
 function section(type, word, title, desc, rows) {
     let body = '';
     if (!rows.length) {
-        body = '<div class="empty">当前筛选条件下暂无数据，可以切换省份。</div>';
+        body = '<div class="empty">当前条件下暂未匹配到院校，可以调整分数或再选科目。</div>';
     } else {
         body = `<div class="recommend-grid-head">院校</div><div class="recommend-grid">`
             + rows.map(r => `<div class="school-item">
