@@ -64,6 +64,7 @@ th{font-weight:800;color:#111827;background:#f9fbff}
 tbody tr:nth-child(even){background:#fcfdff}
 .recommend-table th:nth-child(1){width:100%}
 .school-name{font-size:13px;font-weight:800;line-height:1.2;color:#101828}
+.school-subline{margin-top:2px;color:#3f5f8a;font-size:10px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .school-meta{display:flex;flex-wrap:wrap;align-items:center;gap:3px 7px;margin-top:3px;color:var(--muted);font-size:9px;line-height:1.2}
 .school-region{font-size:10px;color:#344054;font-weight:800;display:inline-flex;align-items:center;gap:4px}
 .school-region:before{content:"";width:4px;height:4px;border-radius:50%;background:var(--gold);display:inline-block}
@@ -107,6 +108,7 @@ tbody tr:nth-child(even){background:#fcfdff}
     .recommend-grid-head{height:28px;padding:0 10px}
     .school-item{min-height:40px;padding:6px 10px}
     .school-name{font-size:12px}
+    .school-subline{font-size:9px}
     .school-meta{font-size:9px}
 }
 @media(max-width:820px){
@@ -126,6 +128,7 @@ tbody tr:nth-child(even){background:#fcfdff}
     .recommend-grid-head{height:26px;padding:0 8px}
     .school-item{min-height:44px;padding:6px 7px}
     .school-name{font-size:11px}
+    .school-subline{font-size:9px}
     .school-meta{gap:2px 5px;font-size:9px}
     .school-region{font-size:9px}
     .summary-tags span,.summary-text{font-size:11px}
@@ -156,6 +159,7 @@ tbody tr:nth-child(even){background:#fcfdff}
     .recommend-grid-head{height:24px;padding:0 6px;font-size:11px}
     .school-item{min-height:45px;padding:5px 5px}
     .school-name{font-size:10px;line-height:1.18}
+    .school-subline{font-size:8px}
     .school-meta{gap:1px 4px;margin-top:2px;font-size:8px}
     .school-region{font-size:8px}
     .school-region:before{width:3px;height:3px}

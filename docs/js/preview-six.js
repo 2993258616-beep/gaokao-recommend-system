@@ -45,38 +45,38 @@ const SCHOOL_PROVINCES = [
     '海南', '重庆', '四川', '贵州', '云南',
     '西藏', '陕西', '甘肃', '青海', '宁夏', '新疆'
 ];
-const PROVINCE_CONTROL_LINES = {
-    河南: { 历史: 471, 物理: 427 },
-    北京: { 历史: 430, 物理: 430 },
-    天津: { 历史: 476, 物理: 476 },
-    河北: { 历史: 477, 物理: 459 },
-    山西: { 历史: 443, 物理: 419 },
-    内蒙古: { 历史: 418, 物理: 375 },
-    辽宁: { 历史: 437, 物理: 367 },
-    吉林: { 历史: 384, 物理: 340 },
-    黑龙江: { 历史: 405, 物理: 360 },
-    上海: { 历史: 402, 物理: 402 },
-    江苏: { 历史: 482, 物理: 463 },
-    浙江: { 历史: 490, 物理: 490 },
-    安徽: { 历史: 477, 物理: 461 },
-    福建: { 历史: 450, 物理: 441 },
-    江西: { 历史: 486, 物理: 429 },
-    山东: { 历史: 441, 物理: 441 },
-    湖北: { 历史: 442, 物理: 426 },
-    湖南: { 历史: 446, 物理: 405 },
-    广东: { 历史: 464, 物理: 436 },
-    广西: { 历史: 402, 物理: 370 },
-    海南: { 历史: 480, 物理: 480 },
-    重庆: { 历史: 438, 物理: 425 },
-    四川: { 历史: 467, 物理: 438 },
-    贵州: { 历史: 458, 物理: 387 },
-    云南: { 历史: 465, 物理: 430 },
-    西藏: { 历史: 315, 物理: 305 },
-    陕西: { 历史: 414, 物理: 394 },
-    甘肃: { 历史: 412, 物理: 374 },
-    青海: { 历史: 405, 物理: 350 },
-    宁夏: { 历史: 404, 物理: 372 },
-    新疆: { 历史: 330, 物理: 280 }
+const PROVINCE_ADMISSION_RULES = {
+    河南: { mode: 'group', label: '院校专业组', line: { 历史: 471, 物理: 427 }, special: { 历史: 552, 物理: 535 }, junior: { 历史: 185, 物理: 185 } },
+    北京: { mode: 'group', label: '院校专业组', line: { 历史: 430, 物理: 430 }, special: { 历史: 519, 物理: 519 }, junior: { 历史: 120, 物理: 120 } },
+    天津: { mode: 'group', label: '院校专业组', line: { 历史: 476, 物理: 476 }, special: { 历史: 562, 物理: 562 }, junior: { 历史: 160, 物理: 160 } },
+    河北: { mode: 'majorSchool', label: '专业（类）+院校', line: { 历史: 477, 物理: 459 }, special: { 历史: 527, 物理: 499 }, junior: { 历史: 200, 物理: 200 } },
+    山西: { mode: 'group', label: '院校专业组', line: { 历史: 443, 物理: 419 }, special: { 历史: 534, 物理: 507 }, junior: { 历史: 180, 物理: 200 } },
+    内蒙古: { mode: 'group', label: '院校专业组', line: { 历史: 418, 物理: 375 }, special: { 历史: 523, 物理: 487 }, junior: { 历史: 160, 物理: 160 } },
+    辽宁: { mode: 'majorSchool', label: '专业（类）+院校', line: { 历史: 437, 物理: 367 }, special: { 历史: 522, 物理: 515 }, junior: { 历史: 150, 物理: 150 } },
+    吉林: { mode: 'group', label: '院校专业组', line: { 历史: 384, 物理: 340 }, special: { 历史: 493, 物理: 479 }, junior: { 历史: 160, 物理: 160 } },
+    黑龙江: { mode: 'group', label: '院校专业组', line: { 历史: 405, 物理: 360 }, special: { 历史: 480, 物理: 472 }, junior: { 历史: 160, 物理: 160 } },
+    上海: { mode: 'group', label: '院校专业组', line: { 历史: 402, 物理: 402 }, special: { 历史: 505, 物理: 505 }, junior: { 历史: 100, 物理: 100 } },
+    江苏: { mode: 'group', label: '院校专业组', line: { 历史: 482, 物理: 463 }, special: { 历史: 537, 物理: 519 }, junior: { 历史: 220, 物理: 220 } },
+    浙江: { mode: 'majorSchool', label: '专业（类）+院校', line: { 历史: 490, 物理: 490 }, special: { 历史: 592, 物理: 592 }, junior: { 历史: 268, 物理: 268 } },
+    安徽: { mode: 'group', label: '院校专业组', line: { 历史: 477, 物理: 461 }, special: { 历史: 515, 物理: 514 }, junior: { 历史: 200, 物理: 200 } },
+    福建: { mode: 'group', juniorMode: 'majorSchool', label: '院校专业组', line: { 历史: 450, 物理: 441 }, special: { 历史: 531, 物理: 520 }, junior: { 历史: 235, 物理: 235 } },
+    江西: { mode: 'group', label: '院校专业组', line: { 历史: 486, 物理: 429 }, special: { 历史: 539, 物理: 505 }, junior: { 历史: 290, 物理: 240 } },
+    山东: { mode: 'majorSchool', label: '专业（类）+院校', line: { 历史: 441, 物理: 441 }, special: { 历史: 521, 物理: 521 }, junior: { 历史: 150, 物理: 150 } },
+    湖北: { mode: 'group', label: '院校专业组', line: { 历史: 442, 物理: 426 }, special: { 历史: 536, 物理: 516 }, junior: { 历史: 200, 物理: 200 } },
+    湖南: { mode: 'group', label: '院校专业组', line: { 历史: 446, 物理: 405 }, special: { 历史: 503, 物理: 476 }, junior: { 历史: 200, 物理: 200 } },
+    广东: { mode: 'group', label: '院校专业组', line: { 历史: 464, 物理: 436 }, special: { 历史: 557, 物理: 534 }, junior: { 历史: 215, 物理: 200 } },
+    广西: { mode: 'group', label: '院校专业组', line: { 历史: 402, 物理: 370 }, special: { 历史: 518, 物理: 495 }, junior: { 历史: 200, 物理: 200 } },
+    海南: { mode: 'group', label: '院校专业组', line: { 历史: 480, 物理: 480 }, special: { 历史: 568, 物理: 568 }, junior: { 历史: 255, 物理: 255 } },
+    重庆: { mode: 'majorSchool', label: '专业（类）+院校', line: { 历史: 438, 物理: 425 }, special: { 历史: 515, 物理: 498 }, junior: { 历史: 180, 物理: 180 } },
+    四川: { mode: 'group', label: '院校专业组', line: { 历史: 467, 物理: 438 }, special: { 历史: 533, 物理: 518 }, junior: { 历史: 150, 物理: 150 } },
+    贵州: { mode: 'majorSchool', label: '专业（类）+院校', line: { 历史: 458, 物理: 387 }, special: { 历史: 517, 物理: 483 }, junior: { 历史: 180, 物理: 180 } },
+    云南: { mode: 'group', label: '院校专业组', line: { 历史: 465, 物理: 430 }, special: { 历史: 555, 物理: 495 }, junior: { 历史: 180, 物理: 180 } },
+    西藏: { mode: 'traditional', label: '传统文理院校志愿', line: { 历史: 315, 物理: 305 }, special: { 历史: 410, 物理: 400 }, junior: { 历史: 255, 物理: 222 } },
+    陕西: { mode: 'group', label: '院校专业组', line: { 历史: 414, 物理: 394 }, special: { 历史: 497, 物理: 473 }, junior: { 历史: 200, 物理: 200 } },
+    甘肃: { mode: 'group', label: '院校专业组', line: { 历史: 412, 物理: 374 }, special: { 历史: 500, 物理: 475 }, junior: { 历史: 160, 物理: 180 } },
+    青海: { mode: 'majorSchool', label: '专业（类）+院校', line: { 历史: 405, 物理: 350 }, special: { 历史: 450, 物理: 420 }, junior: { 历史: 150, 物理: 150 } },
+    宁夏: { mode: 'group', label: '院校专业组', line: { 历史: 404, 物理: 372 }, special: { 历史: 482, 物理: 441 }, junior: { 历史: 150, 物理: 150 } },
+    新疆: { mode: 'traditional', label: '传统文理院校志愿', line: { 历史: 330, 物理: 280 }, special: { 历史: 451, 物理: 421 }, junior: { 历史: 140, 物理: 140 } }
 };
 const ELECTIVE_DEFAULTS_BY_SUBJECT = { 历史: ['政治', '地理'], 物理: ['化学', '生物'] };
 const ELECTIVE_OPTIONS = ['化学', '生物', '政治', '地理'];
@@ -445,22 +445,44 @@ function displayProvinceName(province) {
     return province || BASE_PROVINCE;
 }
 
+function provinceRule(province) {
+    return PROVINCE_ADMISSION_RULES[province] || PROVINCE_ADMISSION_RULES[BASE_PROVINCE];
+}
+
 function provinceLine(subject, province) {
-    const item = PROVINCE_CONTROL_LINES[province] || PROVINCE_CONTROL_LINES[BASE_PROVINCE];
+    const item = provinceRule(province).line;
     return subject === '物理' ? item.物理 : item.历史;
 }
 
-function toBaseScore(score, subject, candidateProvince) {
-    const selectedLine = provinceLine(subject, candidateProvince);
-    const baseLine = provinceLine(subject, BASE_PROVINCE);
-    const diff = Number(score || 0) - selectedLine;
-    return clamp(Math.round(baseLine + diff * PROVINCE_SCORE_SCALE), 100, 750);
+function provinceSpecialLine(subject, province) {
+    const item = provinceRule(province).special || provinceRule(province).line;
+    return subject === '物理' ? item.物理 : item.历史;
 }
 
-function provinceScoreMeta(score, subject, candidateProvince, baseScore) {
-    if (!candidateProvince || candidateProvince === BASE_PROVINCE) return '';
+function provinceJuniorLine(subject, province) {
+    const item = provinceRule(province).junior || { 历史: 150, 物理: 150 };
+    return subject === '物理' ? item.物理 : item.历史;
+}
+
+function toProvinceScore(baseScore, subject, candidateProvince) {
+    if (!candidateProvince || candidateProvince === BASE_PROVINCE) return clamp(Math.round(Number(baseScore || 0)), 100, 750);
+    const baseLine = provinceLine(subject, BASE_PROVINCE);
+    const selectedLine = provinceLine(subject, candidateProvince);
+    const translated = selectedLine + ((Number(baseScore || 0) - baseLine) / PROVINCE_SCORE_SCALE);
+    return clamp(Math.round(translated), 100, 750);
+}
+
+function ruleModeForRow(row) {
+    const rule = provinceRule(row.candidateProvince || BASE_PROVINCE);
+    return row.schoolLevel === '专科' && rule.juniorMode ? rule.juniorMode : rule.mode;
+}
+
+function provinceRuleMeta(subject, candidateProvince) {
+    const rule = provinceRule(candidateProvince);
     const line = provinceLine(subject, candidateProvince);
-    return `，按${candidateProvince}本科线约 ${line} 分估算，折算参考 ${baseScore} 分`;
+    const special = provinceSpecialLine(subject, candidateProvince);
+    const junior = provinceJuniorLine(subject, candidateProvince);
+    return `${rule.label}口径，本科线约 ${line} 分，特控线约 ${special} 分，专科线约 ${junior} 分`;
 }
 
 function resetPlanAndRender() {
@@ -481,7 +503,6 @@ function renderRecommend() {
 
     const score = Number($('score').value || 500);
     const candidateProvince = $('schoolProvince').value || BASE_PROVINCE;
-    const baseScore = toBaseScore(score, subjectType, candidateProvince);
     const criteriaKey = `${score}|${subjectType}|${selectedElectiveText()}|${candidateProvince}`;
     if (criteriaKey !== lastCriteriaKey) {
         recommendNonce = 0;
@@ -492,20 +513,20 @@ function renderRecommend() {
     $('tagElective').innerText = selectedElectiveText();
     $('tagProvince').innerText = displayProvinceName(candidateProvince);
 
-    let rows = recommend(baseScore, subjectType, candidateProvince);
+    let rows = recommend(score, subjectType, candidateProvince);
     if (shouldResetRecommendationBatch(rows, candidateProvince)) {
         recommendNonce = 0;
-        rows = recommend(baseScore, subjectType, candidateProvince);
+        rows = recommend(score, subjectType, candidateProvince);
     }
-    renderSummaryText(score, candidateProvince, baseScore);
+    renderSummaryText(score, candidateProvince);
     $('resultArea').innerHTML = section('rush', '冲', '冲刺推荐', '适合略高于当前分数的院校', rows.rush)
         + section('stable', '稳', '稳妥推荐', '适合重点考虑的匹配院校', rows.stable)
         + section('safe', '保', '保底推荐', '适合保底填报的院校', rows.safe);
 }
 
-function renderSummaryText(score, candidateProvince, baseScore) {
-    const meta = provinceScoreMeta(score, subjectType, candidateProvince, baseScore);
-    $('summaryText').innerText = `按${displayProvinceName(candidateProvince)}当前录取规则估算：${subjectType}组（${selectedElectiveText()}），预估 ${score} 分${meta}，匹配全国院校，第 ${recommendNonce + 1} 批。`;
+function renderSummaryText(score, candidateProvince) {
+    const meta = provinceRuleMeta(subjectType, candidateProvince);
+    $('summaryText').innerText = `按${displayProvinceName(candidateProvince)}当前录取规则估算：${subjectType}组（${selectedElectiveText()}），预估 ${score} 分，${meta}，匹配全国院校，第 ${recommendNonce + 1} 批。`;
 }
 
 function hasRecommendationRows(rows) {
@@ -542,7 +563,7 @@ function recommend(score, subject, schoolProvince) {
         stableRows = takeUniqueRows(varyCandidateOrder(stableCandidates, score, subject, schoolProvince, '稳妥'), used, previousBatchKeys);
         safeRows = takeUniqueRows(varyCandidateOrder(safeCandidates, score, subject, schoolProvince, '保底'), used, previousBatchKeys);
     }
-    rebalanceScarceHighScoreRows(score, subject, rushRows, stableRows, safeRows);
+    rebalanceScarceHighScoreRows(score, subject, rushRows, stableRows, safeRows, schoolProvince);
     const canonicalRows = canonicalizeRows(score, rushRows, stableRows, safeRows,
         rushCandidates, stableCandidates, safeCandidates, previousBatchKeys);
     return {
@@ -561,7 +582,7 @@ function previousRecommendationKeys(score, subject, schoolProvince, rushCandidat
         const rushRows = takeUniqueRows(varyCandidateOrder(rushCandidates, score, subject, schoolProvince, '冲刺'), used, keys);
         const stableRows = takeUniqueRows(varyCandidateOrder(stableCandidates, score, subject, schoolProvince, '稳妥'), used, keys);
         const safeRows = takeUniqueRows(varyCandidateOrder(safeCandidates, score, subject, schoolProvince, '保底'), used, keys);
-        rebalanceScarceHighScoreRows(score, subject, rushRows, stableRows, safeRows);
+        rebalanceScarceHighScoreRows(score, subject, rushRows, stableRows, safeRows, schoolProvince);
         const canonicalRows = canonicalizeRows(score, rushRows, stableRows, safeRows,
             rushCandidates, stableCandidates, safeCandidates, keys);
         [...canonicalRows.rush, ...canonicalRows.stable, ...canonicalRows.safe].forEach(row => keys.add(rowKey(row)));
@@ -572,9 +593,9 @@ function previousRecommendationKeys(score, subject, schoolProvince, rushCandidat
 
 function recommendBucket(score, subject, schoolProvince, bucket, preferredHenanCount) {
     const allRegions = true;
-    const nearLineJuniorCollege = shouldUseQualityJuniorCollege(score, subject, bucket);
-    const allowUndergraduate = score >= undergraduateLine(subject) && !nearLineJuniorCollege;
-    const allowJuniorCollege = score < undergraduateLine(subject) || nearLineJuniorCollege;
+    const nearLineJuniorCollege = shouldUseQualityJuniorCollege(score, subject, bucket, schoolProvince);
+    const allowUndergraduate = score >= undergraduateLine(subject, schoolProvince) && !nearLineJuniorCollege;
+    const allowJuniorCollege = score < undergraduateLine(subject, schoolProvince) || nearLineJuniorCollege;
     const all = queryCandidatesWithFallback(score, subject, schoolProvince, bucket, allowUndergraduate,
         allowJuniorCollege, nearLineJuniorCollege, QUERY_LIMIT);
 
@@ -639,8 +660,8 @@ function mergeFallbackRows(primary, fallback, limit) {
     return Array.from(merged.values());
 }
 
-function rebalanceScarceHighScoreRows(score, subject, rushRows, stableRows, safeRows) {
-    if (!score || score < 680 || score < undergraduateLine(subject) + 100) return;
+function rebalanceScarceHighScoreRows(score, subject, rushRows, stableRows, safeRows, candidateProvince = BASE_PROVINCE) {
+    if (!score || score < 680 || score < undergraduateLine(subject, candidateProvince) + 100) return;
     if (!stableRows.length && rushRows.length > 1) {
         stableRows.push(rushRows.pop());
     }
@@ -746,7 +767,7 @@ function queryCandidatesWithFallback(score, subject, schoolProvince, bucket, all
 }
 
 function queryCandidates(score, subject, schoolProvince, bucket, allowUndergraduate, allowJuniorCollege, preferQualityJuniorCollege, limit) {
-    const line = undergraduateLine(subject);
+    const line = undergraduateLine(subject, schoolProvince);
     const [low, high] = scoreBand(score, bucket, allowUndergraduate, allowJuniorCollege, line);
 
     return predictionLines
@@ -759,7 +780,7 @@ function queryCandidates(score, subject, schoolProvince, bucket, allowUndergradu
         .filter(row => allowJuniorCollege || row.schoolLevel !== '专科')
         .filter(row => !allowUndergraduate || allowJuniorCollege || row.schoolLevel === '本科')
         .filter(row => allowUndergraduate || !allowJuniorCollege || row.schoolLevel === '专科')
-        .map(row => toNationalCandidate(row, schoolProvince))
+        .map(row => toProvinceCandidate(row, schoolProvince))
         .filter(row => {
             if (!allowUndergraduate && allowJuniorCollege) {
                 return scoreOf(row) <= line + 25 && row.predictScore <= line + 25;
@@ -774,15 +795,17 @@ function queryCandidates(score, subject, schoolProvince, bucket, allowUndergradu
         .slice(0, Math.max(1, Math.min(limit, 30)));
 }
 
-function toNationalCandidate(row, candidateProvince = BASE_PROVINCE) {
+function toProvinceCandidate(row, candidateProvince = BASE_PROVINCE) {
     const copy = { ...row };
     const delta = nationalAdmissionAdjustment(copy, candidateProvince);
     copy.nationalDelta = delta;
-    copy.nationalEstimateLabel = copy.schoolProvince === candidateProvince ? '本省录取参考' : '外省录取估算';
-    copy.filingScore = clamp(Math.round(Number(copy.filingScore || copy.predictScore || 0) + delta), 0, 750);
-    copy.predictScore = clamp(Math.round(Number(copy.predictScore || copy.filingScore || 0) + delta), 0, 750);
-    copy.predictLow = clamp(Math.round(Number(copy.predictLow || copy.predictScore - 6) + delta), 0, 750);
-    copy.predictHigh = clamp(Math.round(Number(copy.predictHigh || copy.predictScore + 6) + delta), 0, 750);
+    copy.candidateProvince = candidateProvince;
+    copy.admissionMode = ruleModeForRow(copy);
+    copy.nationalEstimateLabel = copy.schoolProvince === candidateProvince ? '本省招生估算' : '外省招生估算';
+    copy.filingScore = toProvinceScore(Number(copy.filingScore || copy.predictScore || 0) + delta, copy.subjectType, candidateProvince);
+    copy.predictScore = toProvinceScore(Number(copy.predictScore || copy.filingScore || 0) + delta, copy.subjectType, candidateProvince);
+    copy.predictLow = toProvinceScore(Number(copy.predictLow || copy.predictScore - 6) + delta, copy.subjectType, candidateProvince);
+    copy.predictHigh = toProvinceScore(Number(copy.predictHigh || copy.predictScore + 6) + delta, copy.subjectType, candidateProvince);
     copy.predictRange = `${copy.predictLow}-${copy.predictHigh}`;
     copy.confidence = copy.nationalEstimateLabel;
     return copy;
@@ -804,8 +827,8 @@ function nationalAdmissionAdjustment(row, candidateProvince = BASE_PROVINCE) {
     return clamp(delta, -8, 8);
 }
 
-function shouldUseQualityJuniorCollege(score, subject, bucket) {
-    const line = undergraduateLine(subject);
+function shouldUseQualityJuniorCollege(score, subject, bucket, candidateProvince = BASE_PROVINCE) {
+    const line = undergraduateLine(subject, candidateProvince);
     return score >= line && score <= line + NEAR_UNDERGRADUATE_MARGIN && bucket !== '冲刺';
 }
 
@@ -1164,8 +1187,8 @@ function polishPrediction(row, score, bucket) {
     let predicted = copy.predictScore + displayBoost(copy);
     predicted = clampToBucket(predicted, score, bucket);
     const band = copy.schoolLevel === '本科' ? 6 : 8;
-    if (copy.schoolLevel === '本科') predicted = Math.max(predicted, undergraduateLine(copy.subjectType) + 2);
-    if (copy.schoolLevel === '专科') predicted = Math.min(predicted, undergraduateLine(copy.subjectType) + 18);
+    if (copy.schoolLevel === '本科') predicted = Math.max(predicted, undergraduateLine(copy.subjectType, copy.candidateProvince) + 2);
+    if (copy.schoolLevel === '专科') predicted = Math.min(predicted, undergraduateLine(copy.subjectType, copy.candidateProvince) + 18);
     copy.predictScore = predicted;
     copy.predictLow = clamp(predicted - band, 0, 750);
     copy.predictHigh = clamp(predicted + band, 0, 750);
@@ -1190,11 +1213,13 @@ function section(type, word, title, desc, rows) {
     } else {
         body = `<div class="recommend-grid-head">院校</div><div class="recommend-grid">`
             + rows.map(r => `<div class="school-item">
-                    <div class="school-name">${escapeHtml(displaySchoolName(r))} ${escapeHtml(r.majorGroup || '')}组</div>
+                    <div class="school-name">${escapeHtml(displaySchoolName(r))}${displayMajorGroupSuffix(r)}</div>
+                    ${displayApplicationSubline(r)}
                     <div class="school-meta">
                         <span class="school-region">${escapeHtml(r.schoolProvince || '')}</span>
                         <span>${escapeHtml(r.schoolType || '')}</span>
                         <span>${escapeHtml(displaySchoolLevel(r))}</span>
+                        <span>${escapeHtml(displayAdmissionMode(r))}</span>
                         <span>${escapeHtml(r.nationalEstimateLabel || '全国录取估算')}</span>
                     </div>
                 </div>`).join('') + '</div>';
@@ -1217,6 +1242,27 @@ function displaySchoolLevel(row) {
         return '专科批';
     }
     return row.schoolLevel || '';
+}
+
+function displayMajorGroupSuffix(row) {
+    if (!row || ruleModeForRow(row) !== 'group' || !row.majorGroup) return '';
+    return ` ${escapeHtml(row.majorGroup)}组`;
+}
+
+function displayApplicationSubline(row) {
+    if (!row) return '';
+    const mode = ruleModeForRow(row);
+    if (mode !== 'majorSchool') return '';
+    const major = resolveMajorText(row);
+    if (!major) return '';
+    return `<div class="school-subline">专业（类）：${escapeHtml(major)}</div>`;
+}
+
+function displayAdmissionMode(row) {
+    const mode = ruleModeForRow(row);
+    if (mode === 'group') return '院校专业组';
+    if (mode === 'majorSchool') return '专业+院校';
+    return '院校志愿';
 }
 
 function isUndergradLikeJuniorCollege(schoolName) {
@@ -1277,8 +1323,8 @@ function isRenderableMajorText(value) {
     return true;
 }
 
-function undergraduateLine(subject) {
-    return subject === '物理' ? PHYSICS_UNDERGRADUATE_LINE_2025 : HISTORY_UNDERGRADUATE_LINE_2025;
+function undergraduateLine(subject, candidateProvince = BASE_PROVINCE) {
+    return provinceLine(subject, candidateProvince);
 }
 
 function scoreOf(row) {
