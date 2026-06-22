@@ -1253,7 +1253,7 @@ function displayApplicationSubline(row) {
     if (!row) return '';
     const mode = ruleModeForRow(row);
     if (mode !== 'majorSchool') return '';
-    const major = resolveMajorText(row);
+    const major = resolveApplicationMajorText(row);
     if (!major) return '';
     return `<div class="school-subline">专业（类）：${escapeHtml(major)}</div>`;
 }
@@ -1289,6 +1289,25 @@ function resolveMajorText(row) {
     return fixed || '';
 }
 
+function resolveApplicationMajorText(row) {
+    const fixed = MAJOR_TEXT_FIXES.get(`${row.schoolName}|${row.subjectType}|${row.majorGroup}`);
+    const candidates = [
+        row.majorCategory,
+        ...splitMajorCandidates(row.majorDirection),
+        fixed
+    ]
+        .map(value => normalizeMajorName(String(value || '').trim()))
+        .filter(isCleanApplicationMajorText);
+    return candidates[0] || '';
+}
+
+function splitMajorCandidates(value) {
+    return String(value || '')
+        .split(/[、,，;；/]/)
+        .map(item => item.trim())
+        .filter(Boolean);
+}
+
 function normalizeMajorName(value) {
     return value
         .replace(/^划[)）]?$/, '')
@@ -1320,6 +1339,15 @@ function isRenderableMajorText(value) {
     if (!text) return false;
     if (/^划[)）]?$/.test(text)) return false;
     if (/^[)）]+$/.test(text)) return false;
+    return true;
+}
+
+function isCleanApplicationMajorText(value) {
+    const text = String(value || '').trim();
+    if (!isRenderableMajorText(text)) return false;
+    if (text.length > 22) return false;
+    if (/[0-9]\d{2,}|元|收费|项目|校区|建议|英语成绩|只招|不招|要求|地点|年\)|人$|点[:：]/.test(text)) return false;
+    if (/^[()（）]+/.test(text)) return false;
     return true;
 }
 
