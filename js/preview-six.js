@@ -1,4 +1,5 @@
 let subjectType = '历史';
+let electiveSubject = '历史';
 let predictionLines = [];
 
 const MAX_VISIBLE_ROWS = 6;
@@ -42,6 +43,8 @@ const SCHOOL_PROVINCES = [
     '海南', '重庆', '四川', '贵州', '云南',
     '西藏', '陕西', '甘肃', '青海', '宁夏', '新疆'
 ];
+const ELECTIVE_DEFAULT_BY_SUBJECT = { 历史: '历史', 物理: '物理' };
+const SUBJECT_BY_ELECTIVE = { 历史: '历史', 政治: '历史', 物理: '物理', 化学: '物理' };
 const HIGH_QUALITY_JUNIOR_COLLEGE_KEYWORDS = [
     '黄河水利职业技术学院', '河南工业职业技术学院', '河南职业技术学院', '河南农业职业学院', '许昌职业技术学院',
     '郑州铁路职业技术学院', '河南经贸职业学院', '河南交通职业技术学院', '河南应用技术职业学院', '河南医学高等专科学校',
@@ -71,9 +74,18 @@ setupStaticLogin();
 
 document.querySelectorAll('.subject').forEach(btn => {
     btn.addEventListener('click', () => {
-        document.querySelectorAll('.subject').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
         subjectType = btn.dataset.value;
+        electiveSubject = ELECTIVE_DEFAULT_BY_SUBJECT[subjectType] || electiveSubject;
+        updateSubjectControls();
+        resetPlanAndRender();
+    });
+});
+
+document.querySelectorAll('.elective').forEach(btn => {
+    btn.addEventListener('click', () => {
+        electiveSubject = btn.dataset.value;
+        subjectType = SUBJECT_BY_ELECTIVE[electiveSubject] || subjectType;
+        updateSubjectControls();
         resetPlanAndRender();
     });
 });
@@ -329,6 +341,7 @@ async function sha256(value) {
 }
 
 async function init() {
+    updateSubjectControls();
     renderProvinceOptions();
     try {
         const response = await fetch('./assets/prediction-lines.json?v=2026062002', { cache: 'no-store' });
@@ -342,8 +355,21 @@ async function init() {
 
 function renderProvinceOptions() {
     $('schoolProvince').innerHTML = SCHOOL_PROVINCES
-        .map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`)
+        .map(p => `<option value="${escapeHtml(p)}">${escapeHtml(displayProvinceName(p))}</option>`)
         .join('');
+}
+
+function updateSubjectControls() {
+    document.querySelectorAll('.subject').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.value === subjectType);
+    });
+    document.querySelectorAll('.elective').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.value === electiveSubject);
+    });
+}
+
+function displayProvinceName(province) {
+    return province === '全部地区' ? '全部省份' : province;
 }
 
 function resetPlanAndRender() {
@@ -356,7 +382,7 @@ function resetPlanAndRender() {
 function getCurrentCriteriaKey() {
     const score = Number($('score').value || 500);
     const schoolProvince = $('schoolProvince').value || '全部地区';
-    return `${score}|${subjectType}|${schoolProvince}`;
+    return `${score}|${subjectType}|${electiveSubject}|${schoolProvince}`;
 }
 
 function renderRecommend() {
@@ -364,14 +390,15 @@ function renderRecommend() {
 
     const score = Number($('score').value || 500);
     const schoolProvince = $('schoolProvince').value || '全部地区';
-    const criteriaKey = `${score}|${subjectType}|${schoolProvince}`;
+    const criteriaKey = `${score}|${subjectType}|${electiveSubject}|${schoolProvince}`;
     if (criteriaKey !== lastCriteriaKey) {
         recommendNonce = 0;
         lastCriteriaKey = criteriaKey;
         manualRecommendStarted = false;
     }
     $('tagSubject').innerText = subjectType + '类';
-    $('tagProvince').innerText = schoolProvince;
+    $('tagElective').innerText = electiveSubject;
+    $('tagProvince').innerText = displayProvinceName(schoolProvince);
 
     let rows = recommend(score, subjectType, schoolProvince);
     if (shouldResetRecommendationBatch(rows, schoolProvince)) {
@@ -385,7 +412,7 @@ function renderRecommend() {
 }
 
 function renderSummaryText(score, schoolProvince) {
-    $('summaryText').innerText = `按历史录取数据参考：河南${subjectType}类，预估 ${score} 分，筛选条件为学校地区：${schoolProvince}，第 ${recommendNonce + 1} 批。`;
+    $('summaryText').innerText = `按全国历年录取数据参考：${subjectType}类（${electiveSubject}），预估 ${score} 分，筛选省份：${displayProvinceName(schoolProvince)}，第 ${recommendNonce + 1} 批。`;
 }
 
 function hasRecommendationRows(rows) {
@@ -427,8 +454,6 @@ function recommend(score, subject, schoolProvince) {
     rebalanceScarceHighScoreRows(score, subject, rushRows, stableRows, safeRows);
     const canonicalRows = canonicalizeRows(score, rushRows, stableRows, safeRows,
         rushCandidates, stableCandidates, safeCandidates, previousBatchKeys);
-    if (allRegions) enforceHenanFirstPageRows(canonicalRows, score, subject, previousBatchKeys);
-
     return {
         rush: canonicalRows.rush.map(row => polishPrediction(row, score, '冲刺')),
         stable: canonicalRows.stable.map(row => polishPrediction(row, score, '稳妥')),
@@ -448,7 +473,6 @@ function previousRecommendationKeys(score, subject, schoolProvince, rushCandidat
         rebalanceScarceHighScoreRows(score, subject, rushRows, stableRows, safeRows);
         const canonicalRows = canonicalizeRows(score, rushRows, stableRows, safeRows,
             rushCandidates, stableCandidates, safeCandidates, keys);
-        if (!schoolProvince || schoolProvince === '全部地区') enforceHenanFirstPageRows(canonicalRows, score, subject, keys);
         [...canonicalRows.rush, ...canonicalRows.stable, ...canonicalRows.safe].forEach(row => keys.add(rowKey(row)));
     }
     recommendNonce = currentNonce;
@@ -504,6 +528,7 @@ function recommendBucket(score, subject, schoolProvince, bucket, preferredHenanC
             pool = mergeFallbackRows(pool, provincialReserve, QUERY_LIMIT);
         }
     }
+    if (preferredHenanCount <= 0) return pool;
     let henan = queryCandidatesWithFallback(score, subject, '河南', bucket, allowUndergraduate,
         allowJuniorCollege, nearLineJuniorCollege, Math.max(preferredHenanCount + 2, 3));
     if (bucket === '冲刺' && henan.length < preferredHenanCount && allowUndergraduate && !allowJuniorCollege) {
@@ -755,8 +780,6 @@ function compareRows(a, b, score, bucket) {
     } else {
         if (a.predictScore !== b.predictScore) return b.predictScore - a.predictScore;
     }
-    const henanOrder = (isHenan(a) ? 0 : 1) - (isHenan(b) ? 0 : 1);
-    if (henanOrder !== 0) return henanOrder;
     return scoreOf(b) - scoreOf(a);
 }
 
@@ -811,17 +834,7 @@ function mixHenanRows(all, henan, preferredHenanCount) {
 }
 
 function henanLimitsByBucket(score, subject, schoolProvince) {
-    if (schoolProvince && schoolProvince !== '全部地区') {
-        return [MAX_VISIBLE_ROWS, MAX_VISIBLE_ROWS, MAX_VISIBLE_ROWS];
-    }
-    const rule = henanFirstPageRule(score);
-    if (rule && rule.min >= 5) return [2, 2, 2];
-    if (rule && rule.min >= 3) return [1, 1, 1];
-    const totalLimit = clamp(totalHenanLimit(score, subject), 1, 4);
-    if (totalLimit === 1) return rotateHenanLimits(score, subject, [1, 0, 0], [0, 1, 0], [0, 0, 1]);
-    if (totalLimit === 2) return rotateHenanLimits(score, subject, [1, 1, 0], [1, 0, 1], [0, 1, 1]);
-    if (totalLimit === 3) return [1, 1, 1];
-    return rotateHenanLimits(score, subject, [2, 1, 1], [1, 2, 1], [1, 1, 2]);
+    return [0, 0, 0];
 }
 
 function henanFirstPageRule(score) {
@@ -1055,7 +1068,7 @@ function displayBoost(row) {
 function section(type, word, title, desc, rows) {
     let body = '';
     if (!rows.length) {
-        body = '<div class="empty">当前筛选条件下暂无数据，可以切换学校地区。</div>';
+        body = '<div class="empty">当前筛选条件下暂无数据，可以切换省份。</div>';
     } else {
         body = `<div class="recommend-grid-head">院校</div><div class="recommend-grid">`
             + rows.map(r => `<div class="school-item">
@@ -1064,7 +1077,7 @@ function section(type, word, title, desc, rows) {
                         <span class="school-region">${escapeHtml(r.schoolProvince || '')}</span>
                         <span>${escapeHtml(r.schoolType || '')}</span>
                         <span>${escapeHtml(displaySchoolLevel(r))}</span>
-                        <span>河南考生</span>
+                        <span>全国参考</span>
                     </div>
                 </div>`).join('') + '</div>';
     }

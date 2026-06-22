@@ -34,6 +34,9 @@ select{width:100%;height:36px;border:1px solid #cfd9e8;border-radius:6px;backgro
 .subject:first-child{border-radius:6px 0 0 6px}
 .subject:last-child{border-left:0;border-radius:0 6px 6px 0}
 .subject.active{background:linear-gradient(135deg,#1769e0,#0b55c7);color:#fff;border-color:#1769e0;box-shadow:0 8px 18px rgba(23,105,224,.24)}
+.elective-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:7px}
+.elective{height:26px;border:1px solid #d5e1f0;border-radius:6px;background:#fff;color:#475467;font-size:12px;font-weight:800;cursor:pointer}
+.elective.active{border-color:#1769e0;background:#eaf2ff;color:#175cd3;box-shadow:0 4px 10px rgba(23,105,224,.12)}
 .primary-btn{height:36px;border:0;border-radius:6px;background:linear-gradient(135deg,#1769e0 0,#0f5fd4 55%,#0e7c86 100%);font-size:14px;font-weight:800;color:#fff;cursor:pointer;box-shadow:0 10px 20px rgba(23,105,224,.24)}
 .primary-btn:hover{filter:brightness(1.04)}
 .summary-tags{display:flex;gap:8px;margin:7px 0 3px;flex-wrap:wrap}
@@ -90,6 +93,7 @@ tbody tr:nth-child(even){background:#fcfdff}
     .search-panel{padding:10px;gap:10px;grid-template-columns:.95fr 1.25fr 1fr .85fr}
     .field label{font-size:11px;margin-bottom:5px}
     .score-input,select,.subject,.primary-btn{height:32px}
+    .elective{height:24px;font-size:11px}
     .score-input input{font-size:16px}
     .primary-btn{font-size:13px}
     table{font-size:12px}
@@ -136,6 +140,8 @@ tbody tr:nth-child(even){background:#fcfdff}
     .score-input{padding:0 8px}
     .score-input input{font-size:15px}
     .score-input span,select,.subject,.primary-btn{font-size:11px}
+    .elective-tabs{gap:4px;margin-top:5px}
+    .elective{height:22px;font-size:10px;border-radius:5px}
     .summary-tags{gap:5px;margin-top:6px}
     .summary-tags span{font-size:10px;padding:3px 5px;border-radius:5px}
     .summary-text{font-size:10px;line-height:1.28}

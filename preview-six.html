@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>河南高考志愿推荐系统</title>
-    <link rel="stylesheet" href="./css/preview-six.css?v=2026062202">
+    <title>全国高考志愿推荐系统</title>
+    <link rel="stylesheet" href="./css/preview-six.css?v=2026062301">
 </head>
 <body>
 <section id="previewLoginView" class="static-login" hidden>
     <form id="loginForm" class="login-card" autocomplete="off">
-        <div class="login-title">河南高考志愿推荐系统</div>
+        <div class="login-title">全国高考志愿推荐系统</div>
         <div class="login-subtitle">2026 预测版 · 登录后进入推荐页面</div>
         <label>账号</label>
         <input id="loginUser" name="username" placeholder="请输入账号" maxlength="50" required>
@@ -25,7 +25,7 @@
         <div class="top-actions">
             <button id="staticLogout" class="logout-btn" type="button">安全退出</button>
         </div>
-        <h1>河南高考志愿推荐系统</h1>
+        <h1>全国高考志愿推荐系统</h1>
         <p>2026 预测版</p>
     </header>
 
@@ -41,9 +41,15 @@
                     <button class="subject active" data-value="历史" type="button">历史类</button>
                     <button class="subject" data-value="物理" type="button">物理类</button>
                 </div>
+                <div class="elective-tabs">
+                    <button class="elective active" data-value="历史" type="button">历史</button>
+                    <button class="elective" data-value="政治" type="button">政治</button>
+                    <button class="elective" data-value="物理" type="button">物理</button>
+                    <button class="elective" data-value="化学" type="button">化学</button>
+                </div>
             </div>
             <div class="field">
-                <label>学校地区</label>
+                <label>省份</label>
                 <select id="schoolProvince"></select>
             </div>
             <button id="recommendBtn" class="primary-btn" type="button">开始推荐</button>
@@ -51,10 +57,11 @@
 
         <section class="summary-tags">
             <span>科类：<b id="tagSubject">历史类</b></span>
-            <span>学校地区：<b id="tagProvince">全部地区</b></span>
+            <span>选科：<b id="tagElective">历史</b></span>
+            <span>省份：<b id="tagProvince">全部省份</b></span>
         </section>
 
-        <p class="summary-text" id="summaryText">2026 预测：河南历史类，预估 500 分，当前筛选条件为学校地区：全部地区。</p>
+        <p class="summary-text" id="summaryText">2026 预测：全国历史类，预估 500 分，筛选省份：全部省份。</p>
 
         <section id="resultArea">
             <div class="empty">数据加载中...</div>
@@ -62,7 +69,7 @@
     </main>
 
     <footer class="source-footer">
-        <span>注：该数据均来源于河南省教育考试院&nbsp;&nbsp;推荐结果仅供参考</span>
+        <span>注：数据为全国院校历年录取数据综合估算&nbsp;&nbsp;推荐结果仅供参考</span>
     </footer>
 </div>
 
