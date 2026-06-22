@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>全国高考志愿推荐系统</title>
-    <link rel="stylesheet" href="./css/preview-six.css?v=2026062301">
+    <link rel="stylesheet" href="./css/preview-six.css?v=2026062302">
 </head>
 <body>
 <section id="previewLoginView" class="static-login" hidden>
@@ -36,16 +36,17 @@
                 <div class="score-input"><input id="score" type="number" value="500" min="100" max="750"><span>分</span></div>
             </div>
             <div class="field">
-                <label>科类选择</label>
+                <label>选科组合</label>
                 <div class="subject-tabs">
-                    <button class="subject active" data-value="历史" type="button">历史类</button>
-                    <button class="subject" data-value="物理" type="button">物理类</button>
+                    <button class="subject active" data-value="历史" type="button">历史组</button>
+                    <button class="subject" data-value="物理" type="button">物理组</button>
                 </div>
+                <div class="elective-label">再选科目（四选二）</div>
                 <div class="elective-tabs">
-                    <button class="elective active" data-value="历史" type="button">历史</button>
-                    <button class="elective" data-value="政治" type="button">政治</button>
-                    <button class="elective" data-value="物理" type="button">物理</button>
                     <button class="elective" data-value="化学" type="button">化学</button>
+                    <button class="elective" data-value="生物" type="button">生物</button>
+                    <button class="elective active" data-value="政治" type="button">政治</button>
+                    <button class="elective active" data-value="地理" type="button">地理</button>
                 </div>
             </div>
             <div class="field">
@@ -56,12 +57,12 @@
         </section>
 
         <section class="summary-tags">
-            <span>科类：<b id="tagSubject">历史类</b></span>
-            <span>选科：<b id="tagElective">历史</b></span>
+            <span>首选：<b id="tagSubject">历史组</b></span>
+            <span>再选：<b id="tagElective">政治、地理</b></span>
             <span>省份：<b id="tagProvince">全部省份</b></span>
         </section>
 
-        <p class="summary-text" id="summaryText">2026 预测：全国历史类，预估 500 分，筛选省份：全部省份。</p>
+        <p class="summary-text" id="summaryText">2026 预测：全国历史组（政治、地理），预估 500 分，筛选省份：全部省份。</p>
 
         <section id="resultArea">
             <div class="empty">数据加载中...</div>
@@ -69,7 +70,7 @@
     </main>
 
     <footer class="source-footer">
-        <span>注：数据为全国院校历年录取数据综合估算&nbsp;&nbsp;推荐结果仅供参考</span>
+        <span>注：数据为全国院校历年录取与外省录取情况综合估算&nbsp;&nbsp;推荐结果仅供参考</span>
     </footer>
 </div>
 

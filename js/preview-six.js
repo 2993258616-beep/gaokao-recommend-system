@@ -1,5 +1,5 @@
 let subjectType = '历史';
-let electiveSubject = '历史';
+let selectedElectives = ['政治', '地理'];
 let predictionLines = [];
 
 const MAX_VISIBLE_ROWS = 6;
@@ -43,8 +43,14 @@ const SCHOOL_PROVINCES = [
     '海南', '重庆', '四川', '贵州', '云南',
     '西藏', '陕西', '甘肃', '青海', '宁夏', '新疆'
 ];
-const ELECTIVE_DEFAULT_BY_SUBJECT = { 历史: '历史', 物理: '物理' };
-const SUBJECT_BY_ELECTIVE = { 历史: '历史', 政治: '历史', 物理: '物理', 化学: '物理' };
+const ELECTIVE_DEFAULTS_BY_SUBJECT = { 历史: ['政治', '地理'], 物理: ['化学', '生物'] };
+const ELECTIVE_OPTIONS = ['化学', '生物', '政治', '地理'];
+const NATIONAL_PROVINCE_OFFSETS = {
+    北京: 7, 上海: 7, 天津: 4, 江苏: 4, 浙江: 5, 广东: 5, 山东: 3, 湖北: 2,
+    福建: 2, 重庆: 2, 四川: 1, 河北: 1, 辽宁: 1, 陕西: 1, 安徽: 0, 湖南: 0,
+    江西: 0, 山西: -1, 吉林: -1, 黑龙江: -2, 河南: 0, 广西: -2, 海南: -2,
+    贵州: -3, 云南: -3, 内蒙古: -4, 甘肃: -4, 宁夏: -5, 青海: -5, 新疆: -6, 西藏: -6
+};
 const HIGH_QUALITY_JUNIOR_COLLEGE_KEYWORDS = [
     '黄河水利职业技术学院', '河南工业职业技术学院', '河南职业技术学院', '河南农业职业学院', '许昌职业技术学院',
     '郑州铁路职业技术学院', '河南经贸职业学院', '河南交通职业技术学院', '河南应用技术职业学院', '河南医学高等专科学校',
@@ -75,7 +81,7 @@ setupStaticLogin();
 document.querySelectorAll('.subject').forEach(btn => {
     btn.addEventListener('click', () => {
         subjectType = btn.dataset.value;
-        electiveSubject = ELECTIVE_DEFAULT_BY_SUBJECT[subjectType] || electiveSubject;
+        selectedElectives = [...(ELECTIVE_DEFAULTS_BY_SUBJECT[subjectType] || selectedElectives)];
         updateSubjectControls();
         resetPlanAndRender();
     });
@@ -83,8 +89,7 @@ document.querySelectorAll('.subject').forEach(btn => {
 
 document.querySelectorAll('.elective').forEach(btn => {
     btn.addEventListener('click', () => {
-        electiveSubject = btn.dataset.value;
-        subjectType = SUBJECT_BY_ELECTIVE[electiveSubject] || subjectType;
+        toggleElective(btn.dataset.value);
         updateSubjectControls();
         resetPlanAndRender();
     });
@@ -360,12 +365,44 @@ function renderProvinceOptions() {
 }
 
 function updateSubjectControls() {
+    normalizeSelectedElectives();
     document.querySelectorAll('.subject').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.value === subjectType);
     });
     document.querySelectorAll('.elective').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.value === electiveSubject);
+        btn.classList.toggle('active', selectedElectives.includes(btn.dataset.value));
     });
+}
+
+function normalizeSelectedElectives() {
+    const unique = [];
+    for (const item of selectedElectives) {
+        if (ELECTIVE_OPTIONS.includes(item) && !unique.includes(item)) unique.push(item);
+    }
+    const defaults = ELECTIVE_DEFAULTS_BY_SUBJECT[subjectType] || ELECTIVE_OPTIONS.slice(0, 2);
+    for (const item of defaults) {
+        if (unique.length >= 2) break;
+        if (!unique.includes(item)) unique.push(item);
+    }
+    selectedElectives = unique.slice(0, 2);
+}
+
+function toggleElective(value) {
+    if (!ELECTIVE_OPTIONS.includes(value)) return;
+    normalizeSelectedElectives();
+    if (selectedElectives.includes(value)) {
+        if (selectedElectives.length > 1) selectedElectives = selectedElectives.filter(item => item !== value);
+    } else {
+        selectedElectives = selectedElectives.length >= 2
+            ? selectedElectives.slice(1).concat(value)
+            : selectedElectives.concat(value);
+    }
+    normalizeSelectedElectives();
+}
+
+function selectedElectiveText() {
+    normalizeSelectedElectives();
+    return selectedElectives.join('、');
 }
 
 function displayProvinceName(province) {
@@ -382,7 +419,7 @@ function resetPlanAndRender() {
 function getCurrentCriteriaKey() {
     const score = Number($('score').value || 500);
     const schoolProvince = $('schoolProvince').value || '全部地区';
-    return `${score}|${subjectType}|${electiveSubject}|${schoolProvince}`;
+    return `${score}|${subjectType}|${selectedElectiveText()}|${schoolProvince}`;
 }
 
 function renderRecommend() {
@@ -390,14 +427,14 @@ function renderRecommend() {
 
     const score = Number($('score').value || 500);
     const schoolProvince = $('schoolProvince').value || '全部地区';
-    const criteriaKey = `${score}|${subjectType}|${electiveSubject}|${schoolProvince}`;
+    const criteriaKey = `${score}|${subjectType}|${selectedElectiveText()}|${schoolProvince}`;
     if (criteriaKey !== lastCriteriaKey) {
         recommendNonce = 0;
         lastCriteriaKey = criteriaKey;
         manualRecommendStarted = false;
     }
-    $('tagSubject').innerText = subjectType + '类';
-    $('tagElective').innerText = electiveSubject;
+    $('tagSubject').innerText = subjectType + '组';
+    $('tagElective').innerText = selectedElectiveText();
     $('tagProvince').innerText = displayProvinceName(schoolProvince);
 
     let rows = recommend(score, subjectType, schoolProvince);
@@ -412,7 +449,7 @@ function renderRecommend() {
 }
 
 function renderSummaryText(score, schoolProvince) {
-    $('summaryText').innerText = `按全国历年录取数据参考：${subjectType}类（${electiveSubject}），预估 ${score} 分，筛选省份：${displayProvinceName(schoolProvince)}，第 ${recommendNonce + 1} 批。`;
+    $('summaryText').innerText = `按全国历年录取与外省录取估算参考：${subjectType}组（${selectedElectiveText()}），预估 ${score} 分，筛选省份：${displayProvinceName(schoolProvince)}，第 ${recommendNonce + 1} 批。`;
 }
 
 function hasRecommendationRows(rows) {
@@ -660,7 +697,6 @@ function queryCandidates(score, subject, schoolProvince, bucket, allowUndergradu
     const [low, high] = scoreBand(score, bucket, allowUndergraduate, allowJuniorCollege, line);
 
     return predictionLines
-        .filter(row => row.province === '河南')
         .filter(row => row.subjectType === subject)
         .filter(row => allRegions || row.schoolProvince === schoolProvince)
         .filter(row => row.schoolProvince && row.schoolProvince !== '未识别')
@@ -671,6 +707,7 @@ function queryCandidates(score, subject, schoolProvince, bucket, allowUndergradu
         .filter(row => allowJuniorCollege || row.schoolLevel !== '专科')
         .filter(row => !allowUndergraduate || allowJuniorCollege || row.schoolLevel === '本科')
         .filter(row => allowUndergraduate || !allowJuniorCollege || row.schoolLevel === '专科')
+        .map(toNationalCandidate)
         .filter(row => {
             if (!allowUndergraduate && allowJuniorCollege) {
                 return scoreOf(row) <= line + 25 && row.predictScore <= line + 25;
@@ -683,6 +720,35 @@ function queryCandidates(score, subject, schoolProvince, bucket, allowUndergradu
         .filter(row => row.predictScore >= low && row.predictScore <= high)
         .sort((a, b) => compareRows(a, b, score, bucket))
         .slice(0, Math.max(1, Math.min(limit, 30)));
+}
+
+function toNationalCandidate(row) {
+    const copy = { ...row };
+    const delta = nationalAdmissionAdjustment(copy);
+    copy.nationalDelta = delta;
+    copy.nationalEstimateLabel = copy.schoolProvince === '河南' ? '全国录取参考' : '外省录取估算';
+    copy.filingScore = clamp(Math.round(Number(copy.filingScore || copy.predictScore || 0) + delta), 0, 750);
+    copy.predictScore = clamp(Math.round(Number(copy.predictScore || copy.filingScore || 0) + delta), 0, 750);
+    copy.predictLow = clamp(Math.round(Number(copy.predictLow || copy.predictScore - 6) + delta), 0, 750);
+    copy.predictHigh = clamp(Math.round(Number(copy.predictHigh || copy.predictScore + 6) + delta), 0, 750);
+    copy.predictRange = `${copy.predictLow}-${copy.predictHigh}`;
+    copy.confidence = copy.nationalEstimateLabel;
+    return copy;
+}
+
+function nationalAdmissionAdjustment(row) {
+    let delta = Number(NATIONAL_PROVINCE_OFFSETS[row.schoolProvince] || 0);
+    if (row.schoolLevel === '专科') delta = Math.round(delta * 0.5);
+    const text = [row.schoolName, row.majorGroupFull, row.majorDirection, row.majorCategory].filter(Boolean).join('');
+    if (subjectType === '物理' && !selectedElectives.includes('化学')
+        && containsAny(text, ['医学', '药学', '化学', '材料', '生物', '环境', '食品', '农学'])) {
+        delta += 3;
+    }
+    if (selectedElectives.includes('化学') && containsAny(text, ['医学', '药学', '化学', '材料', '环境'])) delta -= 1;
+    if (selectedElectives.includes('生物') && containsAny(text, ['医学', '护理', '生物', '食品', '农学'])) delta -= 1;
+    if (selectedElectives.includes('政治') && containsAny(text, ['法学', '公安', '政治', '马克思'])) delta -= 1;
+    if (selectedElectives.includes('地理') && containsAny(text, ['地理', '城乡', '规划', '旅游'])) delta -= 1;
+    return clamp(delta, -8, 8);
 }
 
 function shouldUseQualityJuniorCollege(score, subject, bucket) {
@@ -1052,7 +1118,7 @@ function polishPrediction(row, score, bucket) {
     copy.predictHigh = clamp(predicted + band, 0, 750);
     copy.predictRange = `${copy.predictLow}-${copy.predictHigh}`;
     copy.rangeFloat = predicted - scoreOf(copy);
-    copy.confidence = '按2025线预测2026';
+    copy.confidence = copy.nationalEstimateLabel || '全国录取估算';
     return copy;
 }
 
@@ -1060,7 +1126,6 @@ function displayBoost(row) {
     const text = [row.schoolName, row.majorGroupFull, row.majorDirection, row.majorCategory].filter(Boolean).join('');
     let delta = row.schoolLevel === '本科' ? 2 : 1;
     if (containsAny(text, ['临床医学', '口腔医学', '法学', '汉语言文学', '师范', '计算机', '软件', '人工智能', '大数据', '电子信息', '电气', '自动化', '护理'])) delta += 1;
-    if (isHenan(row)) delta += 1;
     if (containsAny(text, ['中外合作', '合作办学'])) delta -= 1;
     return clamp(delta, 0, 4);
 }
@@ -1077,7 +1142,7 @@ function section(type, word, title, desc, rows) {
                         <span class="school-region">${escapeHtml(r.schoolProvince || '')}</span>
                         <span>${escapeHtml(r.schoolType || '')}</span>
                         <span>${escapeHtml(displaySchoolLevel(r))}</span>
-                        <span>全国参考</span>
+                        <span>${escapeHtml(r.nationalEstimateLabel || '全国录取估算')}</span>
                     </div>
                 </div>`).join('') + '</div>';
     }
