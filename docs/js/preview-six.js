@@ -1,5 +1,5 @@
 let subjectType = '历史';
-let selectedElectives = ['政治', '地理'];
+let selectedElectives = ['化学', '生物'];
 let predictionLines = [];
 
 const PREDICTION_ASSET_VERSION = '2026062310';
@@ -9,6 +9,7 @@ const PLAN_COUNT = 6;
 const HISTORY_UNDERGRADUATE_LINE_2025 = 471;
 const PHYSICS_UNDERGRADUATE_LINE_2025 = 427;
 const NEAR_UNDERGRADUATE_MARGIN = 20;
+const HENAN_LOCAL_RECOMMEND_RATIO = 0.3;
 const STATIC_LOGIN_USER = 'admin';
 const STATIC_LOGIN_HASH = '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9';
 const STATIC_LOGIN_KEY = 'gaokao_pages_login_ok';
@@ -61,14 +62,14 @@ const SCHOOL_PROVINCES = [
 const PROVINCE_ADMISSION_RULES = {
     河南: { mode: 'group', label: '院校专业组', line: { 历史: 471, 物理: 427 }, special: { 历史: 552, 物理: 535 }, junior: { 历史: 185, 物理: 185 } },
     北京: { mode: 'group', label: '院校专业组', line: { 历史: 430, 物理: 430 }, special: { 历史: 519, 物理: 519 }, junior: { 历史: 120, 物理: 120 } },
-    天津: { mode: 'group', label: '院校专业组', line: { 历史: 476, 物理: 476 }, special: { 历史: 562, 物理: 562 }, junior: { 历史: 160, 物理: 160 } },
+    天津: { mode: 'group', label: '院校专业组', line: { 历史: 458, 物理: 458 }, special: { 历史: 547, 物理: 547 }, junior: { 历史: 160, 物理: 160 }, lineYear: 2026, specialYear: 2026, juniorYear: 2025 },
     河北: { mode: 'majorSchool', label: '专业（类）+院校', line: { 历史: 477, 物理: 459 }, special: { 历史: 527, 物理: 499 }, junior: { 历史: 200, 物理: 200 } },
     山西: { mode: 'group', label: '院校专业组', line: { 历史: 443, 物理: 419 }, special: { 历史: 534, 物理: 507 }, junior: { 历史: 180, 物理: 200 } },
     内蒙古: { mode: 'group', label: '院校专业组', line: { 历史: 418, 物理: 375 }, special: { 历史: 523, 物理: 487 }, junior: { 历史: 160, 物理: 160 } },
     辽宁: { mode: 'majorSchool', label: '专业（类）+院校', line: { 历史: 437, 物理: 367 }, special: { 历史: 522, 物理: 515 }, junior: { 历史: 150, 物理: 150 } },
     吉林: { mode: 'group', label: '院校专业组', line: { 历史: 384, 物理: 340 }, special: { 历史: 493, 物理: 479 }, junior: { 历史: 160, 物理: 160 } },
     黑龙江: { mode: 'group', label: '院校专业组', line: { 历史: 405, 物理: 360 }, special: { 历史: 480, 物理: 472 }, junior: { 历史: 160, 物理: 160 } },
-    上海: { mode: 'group', label: '院校专业组', line: { 历史: 402, 物理: 402 }, special: { 历史: 505, 物理: 505 }, junior: { 历史: 100, 物理: 100 } },
+    上海: { mode: 'group', label: '院校专业组', line: { 历史: 403, 物理: 403 }, special: { 历史: 504, 物理: 504 }, junior: { 历史: 100, 物理: 100 }, lineYear: 2026, specialYear: 2026, juniorYear: 2025 },
     江苏: { mode: 'group', label: '院校专业组', line: { 历史: 482, 物理: 463 }, special: { 历史: 537, 物理: 519 }, junior: { 历史: 220, 物理: 220 } },
     浙江: { mode: 'majorSchool', label: '专业（类）+院校', line: { 历史: 490, 物理: 490 }, special: { 历史: 592, 物理: 592 }, junior: { 历史: 268, 物理: 268 } },
     安徽: { mode: 'group', label: '院校专业组', line: { 历史: 477, 物理: 461 }, special: { 历史: 515, 物理: 514 }, junior: { 历史: 200, 物理: 200 } },
@@ -151,10 +152,10 @@ const LOCAL_PROVINCE_ADVANTAGE = {
     西藏: -10
 };
 const ELECTIVE_DEFAULTS_BY_SUBJECT = {
-    历史: ['政治', '地理'],
+    历史: ['化学', '生物'],
     物理: ['化学', '生物'],
-    综合: ['物理', '化学'],
-    文科: ['政治', '地理'],
+    综合: ['化学', '生物'],
+    文科: ['化学', '生物'],
     理科: ['化学', '生物']
 };
 const RESELECT_OPTIONS_3_1_2 = ['化学', '生物', '政治', '地理'];
@@ -190,8 +191,7 @@ setupStaticLogin();
 document.querySelectorAll('.subject').forEach(btn => {
     btn.addEventListener('click', () => {
         subjectType = btn.dataset.value;
-        selectedElectives = [...(ELECTIVE_DEFAULTS_BY_SUBJECT[subjectType] || selectedElectives)];
-        updateSubjectControls();
+        updateSubjectControls({ fillMissing: true });
         resetPlanAndRender();
     });
 });
@@ -199,7 +199,7 @@ document.querySelectorAll('.subject').forEach(btn => {
 document.querySelectorAll('.elective').forEach(btn => {
     btn.addEventListener('click', () => {
         toggleElective(btn.dataset.value);
-        updateSubjectControls();
+        updateSubjectControls({ fillMissing: false });
         resetPlanAndRender();
     });
 });
@@ -483,7 +483,6 @@ function syncSubjectControlsForProvince() {
     const options = subjectOptionsForProvince(province);
     if (!options.some(option => option.value === subjectType)) {
         subjectType = options[0].value;
-        selectedElectives = [...(ELECTIVE_DEFAULTS_BY_SUBJECT[subjectType] || selectedElectives)];
     }
     const tabs = document.querySelector('.subject-tabs');
     if (tabs) {
@@ -503,15 +502,14 @@ function syncSubjectControlsForProvince() {
     document.querySelectorAll('.elective-tabs,.elective-label').forEach(el => {
         el.style.display = isTraditional ? 'none' : '';
     });
-    updateSubjectControls();
+    updateSubjectControls({ fillMissing: true });
 }
 
 function bindSubjectButtons() {
     document.querySelectorAll('.subject').forEach(btn => {
         btn.addEventListener('click', () => {
             subjectType = btn.dataset.value;
-            selectedElectives = [...(ELECTIVE_DEFAULTS_BY_SUBJECT[subjectType] || selectedElectives)];
-            updateSubjectControls();
+            updateSubjectControls({ fillMissing: true });
             resetPlanAndRender();
         });
     });
@@ -521,7 +519,7 @@ function bindElectiveButtons() {
     document.querySelectorAll('.elective').forEach(btn => {
         btn.addEventListener('click', () => {
             toggleElective(btn.dataset.value);
-            updateSubjectControls();
+            updateSubjectControls({ fillMissing: false });
             resetPlanAndRender();
         });
     });
@@ -550,8 +548,8 @@ function subjectOptionsForProvince(province) {
     ];
 }
 
-function updateSubjectControls() {
-    normalizeSelectedElectives();
+function updateSubjectControls({ fillMissing = true } = {}) {
+    normalizeSelectedElectives(fillMissing);
     document.querySelectorAll('.subject').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.value === subjectType);
     });
@@ -560,11 +558,15 @@ function updateSubjectControls() {
     });
 }
 
-function normalizeSelectedElectives() {
+function normalizeSelectedElectives(fillMissing = true) {
     const options = currentElectiveOptions();
     const unique = [];
     for (const item of selectedElectives) {
         if (options.includes(item) && !unique.includes(item)) unique.push(item);
+    }
+    if (!fillMissing) {
+        selectedElectives = unique.slice(0, 2);
+        return;
     }
     const defaults = ELECTIVE_DEFAULTS_BY_SUBJECT[subjectType] || ELECTIVE_OPTIONS.slice(0, 2);
     for (const item of defaults) {
@@ -576,25 +578,20 @@ function normalizeSelectedElectives() {
 
 function toggleElective(value) {
     if (!currentElectiveOptions().includes(value)) return;
-    normalizeSelectedElectives();
-    if (selectedElectives.includes(value)) {
-        if (selectedElectives.length > 1) selectedElectives = selectedElectives.filter(item => item !== value);
-    } else {
-        selectedElectives = selectedElectives.length >= 2
-            ? selectedElectives.slice(1).concat(value)
-            : selectedElectives.concat(value);
-    }
-    normalizeSelectedElectives();
+    normalizeSelectedElectives(true);
+    if (selectedElectives.includes(value)) return;
+    selectedElectives = selectedElectives.slice(-1).concat(value);
+    normalizeSelectedElectives(true);
 }
 
 function currentElectiveOptions() {
     const province = $('schoolProvince') ? $('schoolProvince').value || BASE_PROVINCE : BASE_PROVINCE;
-    if (provinceExamMode(province) === 'new33') return ELECTIVE_OPTIONS_3_3;
+    if (provinceExamMode(province) === 'traditional') return [];
     return RESELECT_OPTIONS_3_1_2;
 }
 
 function selectedElectiveText() {
-    normalizeSelectedElectives();
+    normalizeSelectedElectives(false);
     return selectedElectives.join('、');
 }
 
@@ -699,12 +696,38 @@ function provinceRuleMeta(subject, candidateProvince) {
     const line = provinceLine(subject, candidateProvince);
     const special = provinceSpecialLine(subject, candidateProvince);
     const junior = provinceJuniorLine(subject, candidateProvince);
-    const juniorNote = JUNIOR_LINE_REFERENCE_2024.has(candidateProvince) ? '，专科线暂按2024公开线参考' : '';
-    const sourceNote = `，控制线来源：${CONTROL_LINE_SOURCE.year}年公开数据`;
+    const lineYear = scoreLineYear(rule, 'line');
+    const specialYear = scoreLineYear(rule, 'special');
+    const juniorYear = JUNIOR_LINE_REFERENCE_2024.has(candidateProvince)
+        ? 2024
+        : scoreLineYear(rule, 'junior');
+    const newestYear = Math.max(lineYear, specialYear, juniorYear);
+    const lineText = scoreLineText('本科线', line, lineYear);
+    const specialText = scoreLineText('特控线', special, specialYear);
+    const juniorText = scoreLineText('专科线', junior, juniorYear, newestYear);
+    const sourceNote = `，控制线来源：${scoreLineSourceYears(lineYear, specialYear, juniorYear)}公开数据`;
     if (candidateProvince === BASE_PROVINCE) {
-        return `《招生之友》院校专业组口径，本科线 ${line} 分，特控线 ${special} 分，专科线 ${junior} 分${sourceNote}`;
+        return `《招生之友》院校专业组口径，${lineText}，${specialText}，${juniorText}${sourceNote}`;
     }
-    return `${rule.label}口径，本科线 ${line} 分，特控线 ${special} 分，专科线 ${junior} 分${juniorNote}${sourceNote}`;
+    return `${rule.label}口径，${lineText}，${specialText}，${juniorText}${sourceNote}`;
+}
+
+function scoreLineYear(rule, type) {
+    return Number(rule[`${type}Year`] || rule.sourceYear || CONTROL_LINE_SOURCE.year);
+}
+
+function scoreLineText(label, value, year, referenceYear = CONTROL_LINE_SOURCE.year) {
+    const suffix = year === CONTROL_LINE_SOURCE.year && year === referenceYear
+        ? ''
+        : (year < referenceYear ? `（暂按${year}公开线参考）` : `（${year}）`);
+    return `${label} ${value} 分${suffix}`;
+}
+
+function scoreLineSourceYears(...years) {
+    return Array.from(new Set(years.filter(Boolean)))
+        .sort((a, b) => a - b)
+        .map(year => `${year}年`)
+        .join('、');
 }
 
 function resetPlanAndRender() {
@@ -748,8 +771,7 @@ function renderRecommend() {
 }
 
 function renderSummaryText(score, candidateProvince) {
-    const meta = provinceRuleMeta(subjectType, candidateProvince);
-    $('summaryText').innerText = `按${displayProvinceName(candidateProvince)}当前录取规则估算：${subjectSummaryLabel(subjectType, candidateProvince)}，预估 ${score} 分，${meta}，匹配全国院校，第 ${recommendNonce + 1} 批。`;
+    $('summaryText').innerText = `第 ${recommendNonce + 1} 批`;
 }
 
 function hasRecommendationRows(rows) {
@@ -864,12 +886,12 @@ function recommendBucket(score, subject, schoolProvince, bucket, preferredHenanC
         }
     }
     if (preferredHenanCount <= 0) return pool;
-    let henan = queryCandidatesWithFallback(score, subject, '河南', bucket, allowUndergraduate,
-        allowJuniorCollege, nearLineJuniorCollege, Math.max(preferredHenanCount + 2, 3));
+    let henan = queryCandidatesWithFallback(score, subject, schoolProvince, bucket, allowUndergraduate,
+        allowJuniorCollege, nearLineJuniorCollege, Math.max(preferredHenanCount + MAX_VISIBLE_ROWS, 9), BASE_PROVINCE);
     if (bucket === '冲刺' && henan.length < preferredHenanCount && allowUndergraduate && !allowJuniorCollege) {
-        const henanReserve = queryCandidatesWithFallback(score, subject, '河南', '冲刺高分兜底',
-            allowUndergraduate, allowJuniorCollege, nearLineJuniorCollege, Math.max(preferredHenanCount + 2, 3));
-        henan = mergeFallbackRows(henan, henanReserve, Math.max(preferredHenanCount + 2, 3));
+        const henanReserve = queryCandidatesWithFallback(score, subject, schoolProvince, '冲刺高分兜底',
+            allowUndergraduate, allowJuniorCollege, nearLineJuniorCollege, Math.max(preferredHenanCount + MAX_VISIBLE_ROWS, 9), BASE_PROVINCE);
+        henan = mergeFallbackRows(henan, henanReserve, Math.max(preferredHenanCount + MAX_VISIBLE_ROWS, 9));
     }
     return mixHenanRows(pool, henan, preferredHenanCount);
 }
@@ -973,15 +995,15 @@ function fillCanonicalBucket(rows, bucket, score, used, sources, excludedKeys = 
     }
 }
 
-function queryCandidatesWithFallback(score, subject, schoolProvince, bucket, allowUndergraduate, allowJuniorCollege, preferQualityJuniorCollege, limit) {
+function queryCandidatesWithFallback(score, subject, schoolProvince, bucket, allowUndergraduate, allowJuniorCollege, preferQualityJuniorCollege, limit, schoolProvinceFilter = '') {
     const first = queryCandidates(score, subject, schoolProvince, bucket, allowUndergraduate, allowJuniorCollege,
-        preferQualityJuniorCollege, limit);
+        preferQualityJuniorCollege, limit, schoolProvinceFilter);
     if (!preferQualityJuniorCollege || first.length >= MAX_VISIBLE_ROWS) {
         return first;
     }
     const merged = new Map(first.map(row => [rowKey(row), row]));
     const fallback = queryCandidates(score, subject, schoolProvince, bucket, allowUndergraduate, allowJuniorCollege,
-        false, limit);
+        false, limit, schoolProvinceFilter);
     for (const row of fallback) {
         merged.set(rowKey(row), row);
         if (merged.size >= limit) break;
@@ -989,13 +1011,14 @@ function queryCandidatesWithFallback(score, subject, schoolProvince, bucket, all
     return Array.from(merged.values());
 }
 
-function queryCandidates(score, subject, schoolProvince, bucket, allowUndergraduate, allowJuniorCollege, preferQualityJuniorCollege, limit) {
+function queryCandidates(score, subject, schoolProvince, bucket, allowUndergraduate, allowJuniorCollege, preferQualityJuniorCollege, limit, schoolProvinceFilter = '') {
     const line = undergraduateLine(subject, schoolProvince);
     const [low, high] = scoreBand(score, bucket, allowUndergraduate, allowJuniorCollege, line);
 
     return predictionLines
         .filter(row => row.subjectType === subject)
         .filter(row => row.schoolProvince && row.schoolProvince !== '未识别')
+        .filter(row => !schoolProvinceFilter || row.schoolProvince === schoolProvinceFilter)
         .filter(row => schoolProvince !== BASE_PROVINCE || isHenanGuideCandidate(row))
         .filter(row => row.majorDirection && row.majorDirection.trim() && !row.majorDirection.includes('未提供'))
         .filter(row => row.majorCategory && row.majorCategory.trim() && !['理', '术', '技', '管理', '商务', '包含', '未提供', '专业', '验技术', '方向'].includes(row.majorCategory))
@@ -1224,7 +1247,15 @@ function mixHenanRows(all, henan, preferredHenanCount) {
 }
 
 function henanLimitsByBucket(score, subject, schoolProvince) {
-    return [0, 0, 0];
+    if (schoolProvince !== BASE_PROVINCE) return [0, 0, 0];
+    const totalTarget = Math.max(1, Math.round(MAX_VISIBLE_ROWS * 3 * HENAN_LOCAL_RECOMMEND_RATIO));
+    const baseCount = Math.floor(totalTarget / 3);
+    const extraCount = totalTarget % 3;
+    const basePlan = [0, 1, 2].map(index => baseCount + (index < extraCount ? 1 : 0));
+    return rotateHenanLimits(score, subject,
+        basePlan,
+        [basePlan[1], basePlan[2], basePlan[0]],
+        [basePlan[2], basePlan[0], basePlan[1]]);
 }
 
 function henanFirstPageRule(score) {
