@@ -519,6 +519,9 @@ function provinceRuleMeta(subject, candidateProvince) {
     const line = provinceLine(subject, candidateProvince);
     const special = provinceSpecialLine(subject, candidateProvince);
     const junior = provinceJuniorLine(subject, candidateProvince);
+    if (candidateProvince === BASE_PROVINCE) {
+        return `《招生之友》院校专业组口径，本科线约 ${line} 分，特控线约 ${special} 分，专科线约 ${junior} 分`;
+    }
     return `${rule.label}口径，本科线约 ${line} 分，特控线约 ${special} 分，专科线约 ${junior} 分`;
 }
 
@@ -810,6 +813,7 @@ function queryCandidates(score, subject, schoolProvince, bucket, allowUndergradu
     return predictionLines
         .filter(row => row.subjectType === subject)
         .filter(row => row.schoolProvince && row.schoolProvince !== '未识别')
+        .filter(row => schoolProvince !== BASE_PROVINCE || isHenanGuideCandidate(row))
         .filter(row => row.majorDirection && row.majorDirection.trim() && !row.majorDirection.includes('未提供'))
         .filter(row => row.majorCategory && row.majorCategory.trim() && !['理', '术', '技', '管理', '商务', '包含', '未提供', '专业', '验技术', '方向'].includes(row.majorCategory))
         .filter(row => !preferQualityJuniorCollege || isHighQualityJuniorCollege(row))
@@ -834,11 +838,13 @@ function queryCandidates(score, subject, schoolProvince, bucket, allowUndergradu
 
 function toProvinceCandidate(row, candidateProvince = BASE_PROVINCE) {
     const copy = { ...row };
-    const delta = nationalAdmissionAdjustment(copy, candidateProvince);
+    const delta = candidateProvince === BASE_PROVINCE ? 0 : nationalAdmissionAdjustment(copy, candidateProvince);
     copy.nationalDelta = delta;
     copy.candidateProvince = candidateProvince;
     copy.admissionMode = ruleModeForRow(copy);
-    copy.nationalEstimateLabel = copy.schoolProvince === candidateProvince ? '本省招生估算' : '外省招生估算';
+    copy.nationalEstimateLabel = candidateProvince === BASE_PROVINCE
+        ? '招生之友口径'
+        : (copy.schoolProvince === candidateProvince ? '本省招生估算' : '外省招生估算');
     copy.filingScore = toProvinceScore(Number(copy.filingScore || copy.predictScore || 0) + delta, copy.subjectType, candidateProvince);
     copy.predictScore = toProvinceScore(Number(copy.predictScore || copy.filingScore || 0) + delta, copy.subjectType, candidateProvince);
     copy.predictLow = toProvinceScore(Number(copy.predictLow || copy.predictScore - 6) + delta, copy.subjectType, candidateProvince);
@@ -1253,6 +1259,7 @@ function section(type, word, title, desc, rows) {
                     <div class="school-name">${escapeHtml(displaySchoolName(r))}${displayMajorGroupSuffix(r)}</div>
                     ${displayApplicationSubline(r)}
                     <div class="school-meta">
+                        ${displayHenanGuideMeta(r)}
                         <span class="school-region">${escapeHtml(r.schoolProvince || '')}</span>
                         <span>${escapeHtml(r.schoolType || '')}</span>
                         <span>${escapeHtml(displaySchoolLevel(r))}</span>
@@ -1284,6 +1291,15 @@ function displaySchoolLevel(row) {
 function displayMajorGroupSuffix(row) {
     if (!row || ruleModeForRow(row) !== 'group' || !row.majorGroup) return '';
     return ` ${escapeHtml(row.majorGroup)}组`;
+}
+
+function displayHenanGuideMeta(row) {
+    if (!row || row.candidateProvince !== BASE_PROVINCE) return '';
+    const parts = [];
+    if (row.schoolCode) parts.push(`院校代号${row.schoolCode}`);
+    if (Number(row.planCount) > 0) parts.push(`计划${row.planCount}`);
+    parts.push('招生之友');
+    return parts.map(item => `<span>${escapeHtml(item)}</span>`).join('');
 }
 
 function displayApplicationSubline(row) {
@@ -1394,6 +1410,15 @@ function undergraduateLine(subject, candidateProvince = BASE_PROVINCE) {
 
 function scoreOf(row) {
     return Number(row.filingScore || row.predictScore || 0);
+}
+
+function isHenanGuideCandidate(row) {
+    return row
+        && row.province === BASE_PROVINCE
+        && String(row.schoolCode || '').trim()
+        && String(row.majorGroup || '').trim()
+        && String(row.majorGroupFull || '').trim()
+        && Number(row.planCount) > 0;
 }
 
 function isHenan(row) {
