@@ -2,7 +2,7 @@ let subjectType = '历史';
 let selectedElectives = ['政治', '地理'];
 let predictionLines = [];
 
-const PREDICTION_ASSET_VERSION = '2026062309';
+const PREDICTION_ASSET_VERSION = '2026062310';
 const MAX_VISIBLE_ROWS = 6;
 const QUERY_LIMIT = 36;
 const PLAN_COUNT = 6;
@@ -1462,14 +1462,10 @@ function section(type, word, title, desc, rows) {
         body = `<div class="recommend-grid-head">院校</div><div class="recommend-grid">`
             + rows.map(r => `<div class="school-item">
                     <div class="school-name">${escapeHtml(displaySchoolName(r))}${displayMajorGroupSuffix(r)}</div>
-                    ${displayApplicationSubline(r)}
                     <div class="school-meta">
-                        ${displayHenanGuideMeta(r)}
-                        <span class="school-region">${escapeHtml(r.schoolProvince || '')}</span>
-                        <span>${escapeHtml(r.schoolType || '')}</span>
                         <span>${escapeHtml(displaySchoolLevel(r))}</span>
-                        <span>${escapeHtml(displayAdmissionMode(r))}</span>
-                        <span>${escapeHtml(r.nationalEstimateLabel || '全国录取估算')}</span>
+                        <span class="school-region">${escapeHtml(r.schoolProvince || '')}</span>
+                        ${displaySchoolCodeMeta(r)}
                     </div>
                 </div>`).join('') + '</div>';
     }
@@ -1498,13 +1494,9 @@ function displayMajorGroupSuffix(row) {
     return ` ${escapeHtml(row.majorGroup)}组`;
 }
 
-function displayHenanGuideMeta(row) {
-    if (!row || row.candidateProvince !== BASE_PROVINCE) return '';
-    const parts = [];
-    if (row.schoolCode) parts.push(`院校代号${row.schoolCode}`);
-    if (Number(row.planCount) > 0) parts.push(`计划${row.planCount}`);
-    parts.push('招生之友');
-    return parts.map(item => `<span>${escapeHtml(item)}</span>`).join('');
+function displaySchoolCodeMeta(row) {
+    if (!row || !row.schoolCode) return '';
+    return `<span>院校代码${escapeHtml(row.schoolCode)}</span>`;
 }
 
 function displayApplicationSubline(row) {
