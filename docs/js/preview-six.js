@@ -37,6 +37,9 @@ const VOCATIONAL_SCHOOL_WORDS = [
 ];
 const BASE_PROVINCE = '河南';
 const PROVINCE_SCORE_SCALE = 0.82;
+const VALID_ADMISSION_MODES = new Set(['group', 'majorSchool', 'traditional']);
+const SCORE_LINE_TYPES = ['line', 'special', 'junior'];
+const SUBJECT_TYPES = ['历史', '物理'];
 const SCHOOL_PROVINCES = [
     '河南', '北京', '天津', '河北', '山西', '内蒙古',
     '辽宁', '吉林', '黑龙江', '上海', '江苏',
@@ -381,9 +384,10 @@ async function sha256(value) {
 }
 
 async function init() {
-    updateSubjectControls();
-    renderProvinceOptions();
     try {
+        validateProvinceRuleCoverage();
+        updateSubjectControls();
+        renderProvinceOptions();
         const response = await fetch('./assets/prediction-lines.json?v=2026062002', { cache: 'no-store' });
         if (!response.ok) throw new Error('数据文件读取失败');
         predictionLines = await response.json();
@@ -445,8 +449,41 @@ function displayProvinceName(province) {
     return province || BASE_PROVINCE;
 }
 
+function validateProvinceRuleCoverage() {
+    const errors = [];
+    for (const province of SCHOOL_PROVINCES) {
+        const rule = PROVINCE_ADMISSION_RULES[province];
+        if (!rule) {
+            errors.push(`${province}缺少录取规则`);
+            continue;
+        }
+        if (!VALID_ADMISSION_MODES.has(rule.mode)) errors.push(`${province}录取模式无效`);
+        if (rule.juniorMode && !VALID_ADMISSION_MODES.has(rule.juniorMode)) errors.push(`${province}专科录取模式无效`);
+        if (!rule.label) errors.push(`${province}缺少规则名称`);
+        for (const lineType of SCORE_LINE_TYPES) {
+            if (!rule[lineType]) {
+                errors.push(`${province}缺少${lineType}分数线`);
+                continue;
+            }
+            for (const subject of SUBJECT_TYPES) {
+                const value = Number(rule[lineType][subject]);
+                if (!Number.isFinite(value) || value <= 0 || value > 750) {
+                    errors.push(`${province}${subject}${lineType}分数线无效`);
+                }
+            }
+        }
+    }
+    const extraRules = Object.keys(PROVINCE_ADMISSION_RULES)
+        .filter(province => !SCHOOL_PROVINCES.includes(province));
+    if (extraRules.length) errors.push(`存在未展示省份规则：${extraRules.join('、')}`);
+    if (errors.length) throw new Error(`省份录取规则配置不完整：${errors.join('；')}`);
+}
+
 function provinceRule(province) {
-    return PROVINCE_ADMISSION_RULES[province] || PROVINCE_ADMISSION_RULES[BASE_PROVINCE];
+    const currentProvince = province || BASE_PROVINCE;
+    const rule = PROVINCE_ADMISSION_RULES[currentProvince];
+    if (!rule) throw new Error(`${currentProvince}缺少本省录取规则`);
+    return rule;
 }
 
 function provinceLine(subject, province) {
