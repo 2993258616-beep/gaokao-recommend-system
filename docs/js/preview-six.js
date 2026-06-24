@@ -2,13 +2,14 @@ let subjectType = '历史';
 let selectedElectives = ['政治', '地理'];
 let predictionLines = [];
 
-const PREDICTION_ASSET_VERSION = '2026062404';
+const PREDICTION_ASSET_VERSION = '2026062408';
 const MAX_VISIBLE_ROWS = 6;
 const QUERY_LIMIT = 36;
 const PLAN_COUNT = 6;
 const HISTORY_UNDERGRADUATE_LINE_2026 = 459;
 const PHYSICS_UNDERGRADUATE_LINE_2026 = 419;
 const NEAR_UNDERGRADUATE_MARGIN = 20;
+const HENAN_LOCAL_RECOMMEND_RATIO = 0.6;
 const STATIC_LOGIN_USER = 'admin';
 const STATIC_LOGIN_HASH = '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9';
 const STATIC_LOGIN_KEY = 'gaokao_pages_login_ok';
@@ -819,6 +820,9 @@ function recommend(score, subject, schoolProvince) {
     rebalanceScarceHighScoreRows(score, subject, rushRows, stableRows, safeRows, schoolProvince);
     const canonicalRows = canonicalizeRows(score, rushRows, stableRows, safeRows,
         rushCandidates, stableCandidates, safeCandidates, previousBatchKeys);
+    if (schoolProvince === BASE_PROVINCE) {
+        enforceHenanProvinceMix(canonicalRows, score, subject, previousBatchKeys);
+    }
     return {
         rush: canonicalRows.rush.map(row => polishPrediction(row, score, '冲刺')),
         stable: canonicalRows.stable.map(row => polishPrediction(row, score, '稳妥')),
@@ -838,6 +842,9 @@ function previousRecommendationKeys(score, subject, schoolProvince, rushCandidat
         rebalanceScarceHighScoreRows(score, subject, rushRows, stableRows, safeRows, schoolProvince);
         const canonicalRows = canonicalizeRows(score, rushRows, stableRows, safeRows,
             rushCandidates, stableCandidates, safeCandidates, keys);
+        if (schoolProvince === BASE_PROVINCE) {
+            enforceHenanProvinceMix(canonicalRows, score, subject, keys);
+        }
         [...canonicalRows.rush, ...canonicalRows.stable, ...canonicalRows.safe].forEach(row => keys.add(rowKey(row)));
     }
     recommendNonce = currentNonce;
@@ -1254,7 +1261,27 @@ function mixHenanRows(all, henan, preferredHenanCount) {
 }
 
 function henanLimitsByBucket(score, subject, schoolProvince) {
-    return [0, 0, 0];
+    if (schoolProvince !== BASE_PROVINCE) return [0, 0, 0];
+    const totalTarget = Math.max(1, Math.ceil(MAX_VISIBLE_ROWS * 3 * HENAN_LOCAL_RECOMMEND_RATIO));
+    const baseCount = Math.floor(totalTarget / 3);
+    const extraCount = totalTarget % 3;
+    const basePlan = [0, 1, 2].map(index => baseCount + (index < extraCount ? 1 : 0));
+    return rotateHenanLimits(score, subject,
+        basePlan,
+        [basePlan[1], basePlan[2], basePlan[0]],
+        [basePlan[2], basePlan[0], basePlan[1]]);
+}
+
+function enforceHenanProvinceMix(rows, score, subject, excludedKeys = new Set()) {
+    const targetCount = targetHenanRecommendationCount(rows);
+    fillHenanFirstPageRows(rows, score, subject, targetCount, excludedKeys);
+}
+
+function targetHenanRecommendationCount(rows) {
+    const totalRows = ['rush', 'stable', 'safe']
+        .map(bucket => Array.isArray(rows[bucket]) ? rows[bucket].length : 0)
+        .reduce((total, count) => total + count, 0);
+    return Math.max(0, Math.ceil(totalRows * HENAN_LOCAL_RECOMMEND_RATIO));
 }
 
 function henanFirstPageRule(score) {
@@ -1506,16 +1533,35 @@ function section(type, word, title, desc, rows) {
 
 function displaySchoolName(row) {
     if (!row || !row.schoolName) return '';
-    if (row.schoolLevel !== '专科') return row.schoolName || '';
-    const specialName = SPECIAL_JUNIOR_COLLEGE_DISPLAYS.get(row.schoolName);
-    if (specialName) return specialName;
-    if (isUndergradLikeJuniorCollege(row.schoolName)) return `${row.schoolName}（专科批）`;
-    return row.schoolName || '';
+    const schoolName = cleanSchoolName(row.schoolName);
+    if (row.schoolLevel !== '专科') return schoolName;
+    const specialName = SPECIAL_JUNIOR_COLLEGE_DISPLAYS.get(row.schoolName) || SPECIAL_JUNIOR_COLLEGE_DISPLAYS.get(schoolName);
+    if (specialName) return cleanSchoolName(specialName);
+    if (isUndergradLikeJuniorCollege(schoolName)) return `${schoolName}（专科批）`;
+    return schoolName;
+}
+
+function cleanSchoolName(value) {
+    let name = String(value || '').trim()
+        .replace(/^[\s\-—–_]+/, '')
+        .replace(/\(/g, '（')
+        .replace(/\)/g, '）')
+        .replace(/（+/g, '（')
+        .replace(/）+/g, '）');
+    const openCount = (name.match(/（/g) || []).length;
+    let closeCount = (name.match(/）/g) || []).length;
+    while (closeCount > openCount && name.endsWith('）')) {
+        name = name.slice(0, -1);
+        closeCount--;
+    }
+    if (openCount > closeCount) name += '）'.repeat(openCount - closeCount);
+    return name;
 }
 
 function displaySchoolLevel(row) {
+    const schoolName = cleanSchoolName(row && row.schoolName);
     if (row && row.schoolLevel === '专科'
-        && (SPECIAL_JUNIOR_COLLEGE_DISPLAYS.has(row.schoolName) || isUndergradLikeJuniorCollege(row.schoolName))) {
+        && (SPECIAL_JUNIOR_COLLEGE_DISPLAYS.has(row.schoolName) || SPECIAL_JUNIOR_COLLEGE_DISPLAYS.has(schoolName) || isUndergradLikeJuniorCollege(schoolName))) {
         return '专科批';
     }
     return row.schoolLevel || '';
@@ -1548,7 +1594,7 @@ function displayAdmissionMode(row) {
 }
 
 function isUndergradLikeJuniorCollege(schoolName) {
-    const name = String(schoolName || '');
+    const name = cleanSchoolName(schoolName);
     return containsAny(name, UNDERGRAD_LIKE_SCHOOL_WORDS) && !containsAny(name, VOCATIONAL_SCHOOL_WORDS);
 }
 

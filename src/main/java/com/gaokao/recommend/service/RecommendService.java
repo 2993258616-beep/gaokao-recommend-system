@@ -22,6 +22,7 @@ public class RecommendService {
     private static final int QUERY_LIMIT = 18;
     private static final int PLAN_COUNT = 6;
     private static final int NEAR_UNDERGRADUATE_MARGIN = 20;
+    private static final double HENAN_LOCAL_RECOMMEND_RATIO = 0.6;
     private static final List<String> HIGH_QUALITY_JUNIOR_COLLEGE_KEYWORDS = Collections.unmodifiableList(Arrays.asList(
             "黄河水利职业技术学院", "河南工业职业技术学院", "河南职业技术学院", "河南农业职业学院", "许昌职业技术学院",
             "郑州铁路职业技术学院", "河南经贸职业学院", "河南交通职业技术学院", "河南应用技术职业学院", "河南医学高等专科学校",
@@ -69,16 +70,24 @@ public class RecommendService {
     }
 
     public Map<String, List<PredictionLine>> recommend(Integer score, String subjectType, String schoolProvince, String majorName, Integer nonce) {
-        Map<String, List<PredictionLine>> result = new HashMap<String, List<PredictionLine>>();
         int[] henanLimits = henanLimitsByBucket(score, subjectType, schoolProvince);
         List<PredictionLine> rushCandidates = recommendBucket(score, subjectType, schoolProvince, majorName, "冲刺", henanLimits[0]);
         List<PredictionLine> stableCandidates = recommendBucket(score, subjectType, schoolProvince, majorName, "稳妥", henanLimits[1]);
         List<PredictionLine> safeCandidates = recommendBucket(score, subjectType, schoolProvince, majorName, "保底", henanLimits[2]);
 
         Map<String, PredictionLine> used = new LinkedHashMap<String, PredictionLine>();
-        result.put("rush", polishRows(takeUniqueRows(varyCandidateOrder(rushCandidates, score, subjectType, schoolProvince, "冲刺", nonce), used), score, "冲刺"));
-        result.put("stable", polishRows(takeUniqueRows(varyCandidateOrder(stableCandidates, score, subjectType, schoolProvince, "稳妥", nonce), used), score, "稳妥"));
-        result.put("safe", polishRows(takeUniqueRows(varyCandidateOrder(safeCandidates, score, subjectType, schoolProvince, "保底", nonce), used), score, "保底"));
+        Map<String, List<PredictionLine>> rawRows = new HashMap<String, List<PredictionLine>>();
+        rawRows.put("rush", takeUniqueRows(varyCandidateOrder(rushCandidates, score, subjectType, schoolProvince, "冲刺", nonce), used));
+        rawRows.put("stable", takeUniqueRows(varyCandidateOrder(stableCandidates, score, subjectType, schoolProvince, "稳妥", nonce), used));
+        rawRows.put("safe", takeUniqueRows(varyCandidateOrder(safeCandidates, score, subjectType, schoolProvince, "保底", nonce), used));
+        if (!hasText(schoolProvince) || "全部地区".equals(schoolProvince)) {
+            enforceHenanProvinceMix(rawRows, score, subjectType, majorName);
+        }
+
+        Map<String, List<PredictionLine>> result = new HashMap<String, List<PredictionLine>>();
+        result.put("rush", polishRows(rawRows.get("rush"), score, "冲刺"));
+        result.put("stable", polishRows(rawRows.get("stable"), score, "稳妥"));
+        result.put("safe", polishRows(rawRows.get("safe"), score, "保底"));
         return result;
     }
 
@@ -180,26 +189,161 @@ public class RecommendService {
             return new int[]{VISIBLE_LIMIT, VISIBLE_LIMIT, VISIBLE_LIMIT};
         }
 
-        int totalLimit = totalHenanLimit(score, subjectType);
-        if (totalLimit >= 6) {
-            return new int[]{2, 1, 3};
-        }
-        if (totalLimit == 5) {
-            return rotateHenanLimits(score, subjectType, new int[]{2, 1, 2}, new int[]{3, 1, 1});
-        }
-        return rotateHenanLimits(score, subjectType, new int[]{2, 1, 1}, new int[]{1, 1, 2});
+        int totalTarget = Math.max(1, (int) Math.ceil(VISIBLE_LIMIT * 3 * HENAN_LOCAL_RECOMMEND_RATIO));
+        int baseCount = totalTarget / 3;
+        int extraCount = totalTarget % 3;
+        int[] basePlan = new int[]{
+                baseCount + (extraCount > 0 ? 1 : 0),
+                baseCount + (extraCount > 1 ? 1 : 0),
+                baseCount
+        };
+        return rotateHenanLimits(score, subjectType,
+                basePlan,
+                new int[]{basePlan[1], basePlan[2], basePlan[0]},
+                new int[]{basePlan[2], basePlan[0], basePlan[1]});
     }
 
     private int totalHenanLimit(Integer score, String subjectType) {
         return 4;
     }
 
-    private int[] rotateHenanLimits(Integer score, String subjectType, int[] first, int[] second) {
+    private void enforceHenanProvinceMix(Map<String, List<PredictionLine>> rows, Integer score, String subjectType, String majorName) {
+        int targetCount = targetHenanRecommendationCount(rows);
+        int henanCount = countHenanRecommendationRows(rows);
+        if (henanCount >= targetCount) {
+            return;
+        }
+
+        Map<String, PredictionLine> used = new LinkedHashMap<String, PredictionLine>();
+        for (String key : Arrays.asList("rush", "stable", "safe")) {
+            List<PredictionLine> bucketRows = rows.get(key);
+            if (bucketRows == null) {
+                continue;
+            }
+            for (PredictionLine row : bucketRows) {
+                used.put(rowKey(row), row);
+            }
+        }
+
+        while (henanCount < targetCount) {
+            boolean changed = false;
+            for (String[] config : henanBucketConfigs(score, subjectType)) {
+                if (henanCount >= targetCount) {
+                    return;
+                }
+                List<PredictionLine> bucketRows = rows.get(config[0]);
+                PredictionLine candidate = findHenanCandidateForBucket(score, subjectType, majorName, config[1], used);
+                if (addOrReplaceHenanRow(bucketRows, candidate, used)) {
+                    used.put(rowKey(candidate), candidate);
+                    henanCount++;
+                    changed = true;
+                }
+            }
+            if (!changed) {
+                return;
+            }
+        }
+    }
+
+    private int targetHenanRecommendationCount(Map<String, List<PredictionLine>> rows) {
+        int totalRows = 0;
+        for (String key : Arrays.asList("rush", "stable", "safe")) {
+            List<PredictionLine> bucketRows = rows.get(key);
+            totalRows += bucketRows == null ? 0 : bucketRows.size();
+        }
+        return Math.max(0, (int) Math.ceil(totalRows * HENAN_LOCAL_RECOMMEND_RATIO));
+    }
+
+    private int countHenanRecommendationRows(Map<String, List<PredictionLine>> rows) {
+        int count = 0;
+        for (String key : Arrays.asList("rush", "stable", "safe")) {
+            List<PredictionLine> bucketRows = rows.get(key);
+            if (bucketRows == null) {
+                continue;
+            }
+            for (PredictionLine row : bucketRows) {
+                if (isHenan(row)) {
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    private String[][] henanBucketConfigs(Integer score, String subjectType) {
+        String[][] configs = new String[][]{
+                new String[]{"rush", "冲刺"},
+                new String[]{"stable", "稳妥"},
+                new String[]{"safe", "保底"}
+        };
         int seed = score == null ? 0 : score;
         if ("物理".equals(subjectType)) {
             seed += 17;
         }
-        return seed % 2 == 0 ? first : second;
+        int offset = ((seed % configs.length) + configs.length) % configs.length;
+        return new String[][]{configs[offset], configs[(offset + 1) % configs.length], configs[(offset + 2) % configs.length]};
+    }
+
+    private PredictionLine findHenanCandidateForBucket(Integer score, String subjectType, String majorName,
+                                                       String bucket, Map<String, PredictionLine> used) {
+        boolean nearLineJuniorCollege = shouldUseQualityJuniorCollege(score, subjectType, bucket);
+        boolean allowUndergraduate = allowUndergraduate(score, subjectType) && !nearLineJuniorCollege;
+        boolean allowJuniorCollege = allowJuniorCollege(score, subjectType) || nearLineJuniorCollege;
+        for (PredictionLine row : queryRecommendations(score, subjectType, "河南", majorName,
+                bucket, allowUndergraduate, allowJuniorCollege, nearLineJuniorCollege, QUERY_LIMIT)) {
+            if (isUsableHenanCandidate(row, used)) {
+                return row;
+            }
+        }
+        for (String fallbackBucket : fallbackBuckets(bucket)) {
+            for (PredictionLine row : queryRecommendations(score, subjectType, "河南", majorName,
+                    fallbackBucket, allowUndergraduate, allowJuniorCollege, nearLineJuniorCollege, QUERY_LIMIT)) {
+                if (isUsableHenanCandidate(row, used)) {
+                    return row;
+                }
+            }
+        }
+        return null;
+    }
+
+    private List<String> fallbackBuckets(String bucket) {
+        if ("冲刺".equals(bucket)) {
+            return Collections.singletonList("冲刺高分兜底");
+        }
+        if ("稳妥".equals(bucket)) {
+            return Collections.singletonList("保底同省补足");
+        }
+        return Arrays.asList("保底扩展", "保底兜底", "保底同省补足");
+    }
+
+    private boolean isUsableHenanCandidate(PredictionLine row, Map<String, PredictionLine> used) {
+        return isHenan(row) && !used.containsKey(rowKey(row));
+    }
+
+    private boolean addOrReplaceHenanRow(List<PredictionLine> rows, PredictionLine candidate, Map<String, PredictionLine> used) {
+        if (rows == null || candidate == null || used.containsKey(rowKey(candidate))) {
+            return false;
+        }
+        if (rows.size() < VISIBLE_LIMIT) {
+            rows.add(candidate);
+            return true;
+        }
+        for (int i = rows.size() - 1; i >= 0; i--) {
+            if (!isHenan(rows.get(i))) {
+                rows.set(i, candidate);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private int[] rotateHenanLimits(Integer score, String subjectType, int[]... plans) {
+        int seed = score == null ? 0 : score;
+        if ("物理".equals(subjectType)) {
+            seed += 17;
+        }
+        int index = ((seed % plans.length) + plans.length) % plans.length;
+        return plans[index];
     }
 
     private boolean allowUndergraduate(Integer score, String subjectType) {

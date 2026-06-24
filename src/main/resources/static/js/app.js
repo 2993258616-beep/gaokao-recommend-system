@@ -158,23 +158,42 @@ function isJuniorCollege(row) {
 
 function displaySchoolName(row) {
     if (!row || !row.schoolName) return '';
-    if (row.schoolLevel !== '专科') return row.schoolName || '';
-    const specialName = SPECIAL_JUNIOR_COLLEGE_DISPLAYS.get(row.schoolName);
-    if (specialName) return specialName;
-    if (isUndergradLikeJuniorCollege(row.schoolName)) return `${row.schoolName}（专科批）`;
-    return row.schoolName || '';
+    const schoolName = cleanSchoolName(row.schoolName);
+    if (row.schoolLevel !== '专科') return schoolName;
+    const specialName = SPECIAL_JUNIOR_COLLEGE_DISPLAYS.get(row.schoolName) || SPECIAL_JUNIOR_COLLEGE_DISPLAYS.get(schoolName);
+    if (specialName) return cleanSchoolName(specialName);
+    if (isUndergradLikeJuniorCollege(schoolName)) return `${schoolName}（专科批）`;
+    return schoolName;
+}
+
+function cleanSchoolName(value) {
+    let name = String(value || '').trim()
+        .replace(/^[\s\-—–_]+/, '')
+        .replace(/\(/g, '（')
+        .replace(/\)/g, '）')
+        .replace(/（+/g, '（')
+        .replace(/）+/g, '）');
+    const openCount = (name.match(/（/g) || []).length;
+    let closeCount = (name.match(/）/g) || []).length;
+    while (closeCount > openCount && name.endsWith('）')) {
+        name = name.slice(0, -1);
+        closeCount--;
+    }
+    if (openCount > closeCount) name += '）'.repeat(openCount - closeCount);
+    return name;
 }
 
 function displaySchoolLevel(row) {
+    const schoolName = cleanSchoolName(row && row.schoolName);
     if (row && row.schoolLevel === '专科'
-        && (SPECIAL_JUNIOR_COLLEGE_DISPLAYS.has(row.schoolName) || isUndergradLikeJuniorCollege(row.schoolName))) {
+        && (SPECIAL_JUNIOR_COLLEGE_DISPLAYS.has(row.schoolName) || SPECIAL_JUNIOR_COLLEGE_DISPLAYS.has(schoolName) || isUndergradLikeJuniorCollege(schoolName))) {
         return '专科批';
     }
     return row.schoolLevel || '';
 }
 
 function isUndergradLikeJuniorCollege(schoolName) {
-    const name = String(schoolName || '');
+    const name = cleanSchoolName(schoolName);
     return containsAny(name, UNDERGRAD_LIKE_SCHOOL_WORDS) && !containsAny(name, VOCATIONAL_SCHOOL_WORDS);
 }
 

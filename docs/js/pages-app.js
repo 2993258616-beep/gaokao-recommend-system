@@ -7,6 +7,7 @@ const PLAN_COUNT = 6;
 const HISTORY_UNDERGRADUATE_LINE_2026 = 459;
 const PHYSICS_UNDERGRADUATE_LINE_2026 = 419;
 const NEAR_UNDERGRADUATE_MARGIN = 20;
+const HENAN_LOCAL_RECOMMEND_RATIO = 0.6;
 const STATIC_LOGIN_USER = 'admin';
 const STATIC_LOGIN_HASH = '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9';
 const STATIC_LOGIN_KEY = 'gaokao_pages_login_ok';
@@ -338,7 +339,7 @@ async function sha256(value) {
 async function init() {
     renderProvinceOptions();
     try {
-        const response = await fetch('./assets/prediction-lines.json?v=2026062002', { cache: 'no-store' });
+        const response = await fetch('./assets/prediction-lines.json?v=2026062408', { cache: 'no-store' });
         if (!response.ok) throw new Error('数据文件读取失败');
         predictionLines = await response.json();
         resetPlanAndRender();
@@ -821,20 +822,19 @@ function henanLimitsByBucket(score, subject, schoolProvince) {
     if (schoolProvince && schoolProvince !== '全部地区') {
         return [MAX_VISIBLE_ROWS, MAX_VISIBLE_ROWS, MAX_VISIBLE_ROWS];
     }
-    const rule = henanFirstPageRule(score);
-    if (rule && rule.min >= 5) return [2, 2, 2];
-    if (rule && rule.min >= 3) return [1, 1, 1];
-    const totalLimit = clamp(totalHenanLimit(score, subject), 1, 4);
-    if (totalLimit === 1) return rotateHenanLimits(score, subject, [1, 0, 0], [0, 1, 0], [0, 0, 1]);
-    if (totalLimit === 2) return rotateHenanLimits(score, subject, [1, 1, 0], [1, 0, 1], [0, 1, 1]);
-    if (totalLimit === 3) return [1, 1, 1];
-    return rotateHenanLimits(score, subject, [2, 1, 1], [1, 2, 1], [1, 1, 2]);
+    const totalTarget = Math.max(1, Math.ceil(MAX_VISIBLE_ROWS * 3 * HENAN_LOCAL_RECOMMEND_RATIO));
+    const baseCount = Math.floor(totalTarget / 3);
+    const extraCount = totalTarget % 3;
+    const basePlan = [0, 1, 2].map(index => baseCount + (index < extraCount ? 1 : 0));
+    return rotateHenanLimits(score, subject,
+        basePlan,
+        [basePlan[1], basePlan[2], basePlan[0]],
+        [basePlan[2], basePlan[0], basePlan[1]]);
 }
 
 function henanFirstPageRule(score) {
-    if (score >= 160 && score <= 300) return { min: 5, max: 6 };
-    if (score > 300 && score <= 600) return { min: 3, max: 4 };
-    return null;
+    const target = Math.max(1, Math.ceil(MAX_VISIBLE_ROWS * 3 * HENAN_LOCAL_RECOMMEND_RATIO));
+    return { min: target, max: target };
 }
 
 function totalHenanLimit(score, subject) {
@@ -865,10 +865,8 @@ function enforceHenanFirstPageRows(rows, score, subject, excludedKeys = new Set(
     const targetCount = targetHenanFirstPageCount(score, subject, rule);
     ensureHenanBucketCoverage(rows, score, subject, excludedKeys);
     fillHenanFirstPageRows(rows, score, subject, targetCount, excludedKeys);
-    trimHenanFirstPageRows(rows, rule.max);
     ensureHenanBucketCoverage(rows, score, subject, excludedKeys);
     fillHenanFirstPageRows(rows, score, subject, targetCount, excludedKeys);
-    trimHenanFirstPageRows(rows, rule.max);
 }
 
 function targetHenanFirstPageCount(score, subject, rule) {
@@ -1076,23 +1074,42 @@ function section(type, word, title, desc, rows) {
 
 function displaySchoolName(row) {
     if (!row || !row.schoolName) return '';
-    if (row.schoolLevel !== '专科') return row.schoolName || '';
-    const specialName = SPECIAL_JUNIOR_COLLEGE_DISPLAYS.get(row.schoolName);
-    if (specialName) return specialName;
-    if (isUndergradLikeJuniorCollege(row.schoolName)) return `${row.schoolName}（专科批）`;
-    return row.schoolName || '';
+    const schoolName = cleanSchoolName(row.schoolName);
+    if (row.schoolLevel !== '专科') return schoolName;
+    const specialName = SPECIAL_JUNIOR_COLLEGE_DISPLAYS.get(row.schoolName) || SPECIAL_JUNIOR_COLLEGE_DISPLAYS.get(schoolName);
+    if (specialName) return cleanSchoolName(specialName);
+    if (isUndergradLikeJuniorCollege(schoolName)) return `${schoolName}（专科批）`;
+    return schoolName;
+}
+
+function cleanSchoolName(value) {
+    let name = String(value || '').trim()
+        .replace(/^[\s\-—–_]+/, '')
+        .replace(/\(/g, '（')
+        .replace(/\)/g, '）')
+        .replace(/（+/g, '（')
+        .replace(/）+/g, '）');
+    const openCount = (name.match(/（/g) || []).length;
+    let closeCount = (name.match(/）/g) || []).length;
+    while (closeCount > openCount && name.endsWith('）')) {
+        name = name.slice(0, -1);
+        closeCount--;
+    }
+    if (openCount > closeCount) name += '）'.repeat(openCount - closeCount);
+    return name;
 }
 
 function displaySchoolLevel(row) {
+    const schoolName = cleanSchoolName(row && row.schoolName);
     if (row && row.schoolLevel === '专科'
-        && (SPECIAL_JUNIOR_COLLEGE_DISPLAYS.has(row.schoolName) || isUndergradLikeJuniorCollege(row.schoolName))) {
+        && (SPECIAL_JUNIOR_COLLEGE_DISPLAYS.has(row.schoolName) || SPECIAL_JUNIOR_COLLEGE_DISPLAYS.has(schoolName) || isUndergradLikeJuniorCollege(schoolName))) {
         return '专科批';
     }
     return row.schoolLevel || '';
 }
 
 function isUndergradLikeJuniorCollege(schoolName) {
-    const name = String(schoolName || '');
+    const name = cleanSchoolName(schoolName);
     return containsAny(name, UNDERGRAD_LIKE_SCHOOL_WORDS) && !containsAny(name, VOCATIONAL_SCHOOL_WORDS);
 }
 
