@@ -24,6 +24,8 @@ UNDERGRAD = "\u672c\u79d1"
 JUNIOR = "\u4e13\u79d1"
 UNKNOWN = "\u672a\u8bc6\u522b"
 PLAN_SOURCE_LABEL = "2026\u62db\u751f\u4e4b\u53cb"
+HISTORY_UNDERGRADUATE_LINE_2026 = 459
+HISTORY_JUNIOR_LINE_2026 = 179
 
 
 def clean(value):
@@ -49,6 +51,15 @@ def group_full(group, elective):
     if not group:
         return ""
     return f"{group}\uff08{elective}\uff09" if elective else f"{group}\u7ec4"
+
+
+def source_school_level(source_row):
+    batch = clean(source_row.get("batch_name"))
+    if "\u672c\u79d1" in batch:
+        return UNDERGRAD
+    if "\u4e13\u79d1" in batch or "\u9ad8\u804c\u9ad8\u4e13" in batch:
+        return JUNIOR
+    return JUNIOR
 
 
 def row_key_by_code(row):
@@ -110,7 +121,7 @@ def update_prediction_row(target, source_row, confidence_suffix):
     if majors:
         target["majorDirection"] = "\u3001".join(majors)
         target["majorCategory"] = majors[0]
-    target["schoolLevel"] = UNDERGRAD if "\u672c\u79d1" in clean(source_row.get("batch_name")) else target.get("schoolLevel") or JUNIOR
+    target["schoolLevel"] = source_school_level(source_row)
     target["sourcePlanYear"] = 2026
     target["sourcePlanFile"] = clean(source_row.get("source_file"))
     target["confidence"] = confidence_suffix
@@ -125,8 +136,10 @@ def build_estimated_row(template_rows, source_row, next_id):
     scores = [score_value(item) for item in template_rows if score_value(item) > 0]
     if not scores:
         return None
+    school_level = source_school_level(source_row)
+    line_floor = HISTORY_UNDERGRADUATE_LINE_2026 if school_level == UNDERGRAD else HISTORY_JUNIOR_LINE_2026
     predicted = int(round(median(scores) + estimate_adjustment(source_row)))
-    predicted = max(459, min(750, predicted))
+    predicted = max(line_floor, min(750, predicted))
     row = dict(template)
     row.update({
         "id": next_id,
@@ -137,7 +150,7 @@ def build_estimated_row(template_rows, source_row, next_id):
         "subjectType": HISTORY,
         "majorGroup": clean(source_row.get("major_group")),
         "majorGroupFull": group_full(source_row.get("major_group"), source_row.get("elective_subject")),
-        "schoolLevel": UNDERGRAD,
+        "schoolLevel": school_level,
         "planCount": int(source_row.get("plan_count") or 0) or None,
         "filingScore": None,
         "filingRank": None,

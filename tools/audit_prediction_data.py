@@ -38,6 +38,8 @@ def norm_school_name(name):
 
 
 def should_be_junior_level(name):
+    if "联办" in (name or "") or "联合办学" in (name or ""):
+        return False
     comparable = re.sub(r"[（(]原.*?[）)]", "", name or "")
     if any(word in comparable for word in VOCATIONAL_UNIVERSITY_WORDS):
         return False
