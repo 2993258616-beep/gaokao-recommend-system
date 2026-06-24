@@ -37,8 +37,6 @@ select{width:100%;height:36px;border:1px solid #cfd9e8;border-radius:6px;backgro
 .elective-label{margin:7px 0 0;color:#667085;font-size:10px;font-weight:800;line-height:1}
 .elective-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:7px}
 .elective{height:26px;border:1px solid #d5e1f0;border-radius:6px;background:#fff;color:#475467;font-size:12px;font-weight:800;cursor:pointer}
-.elective:focus{outline:0}
-.elective:focus-visible{box-shadow:0 0 0 3px rgba(23,105,224,.18)}
 .elective.active{border-color:#1769e0;background:#eaf2ff;color:#175cd3;box-shadow:0 4px 10px rgba(23,105,224,.12)}
 .primary-btn{height:36px;border:0;border-radius:6px;background:linear-gradient(135deg,#1769e0 0,#0f5fd4 55%,#0e7c86 100%);font-size:14px;font-weight:800;color:#fff;cursor:pointer;box-shadow:0 10px 20px rgba(23,105,224,.24)}
 .primary-btn:hover{filter:brightness(1.04)}

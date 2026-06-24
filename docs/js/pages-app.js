@@ -4,10 +4,9 @@ let predictionLines = [];
 const MAX_VISIBLE_ROWS = 3;
 const QUERY_LIMIT = 18;
 const PLAN_COUNT = 6;
-const HISTORY_UNDERGRADUATE_LINE_2026 = 471;
-const PHYSICS_UNDERGRADUATE_LINE_2026 = 427;
+const HISTORY_UNDERGRADUATE_LINE_2025 = 471;
+const PHYSICS_UNDERGRADUATE_LINE_2025 = 427;
 const NEAR_UNDERGRADUATE_MARGIN = 20;
-const HENAN_LOCAL_RECOMMEND_RATIO = 0.3;
 const STATIC_LOGIN_USER = 'admin';
 const STATIC_LOGIN_HASH = '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9';
 const STATIC_LOGIN_KEY = 'gaokao_pages_login_ok';
@@ -386,7 +385,7 @@ function renderRecommend() {
 }
 
 function renderSummaryText(score, schoolProvince) {
-    $('summaryText').innerText = `第 ${recommendNonce + 1} 批`;
+    $('summaryText').innerText = `按历史录取数据参考：河南${subjectType}类，预估 ${score} 分，筛选条件为学校地区：${schoolProvince}，第 ${recommendNonce + 1} 批。`;
 }
 
 function hasRecommendationRows(rows) {
@@ -428,7 +427,7 @@ function recommend(score, subject, schoolProvince) {
     rebalanceScarceHighScoreRows(score, subject, rushRows, stableRows, safeRows);
     const canonicalRows = canonicalizeRows(score, rushRows, stableRows, safeRows,
         rushCandidates, stableCandidates, safeCandidates, previousBatchKeys);
-    if (allRegions) enforceHenanProvinceMix(canonicalRows, score, subject, previousBatchKeys);
+    if (allRegions) enforceHenanFirstPageRows(canonicalRows, score, subject, previousBatchKeys);
 
     return {
         rush: canonicalRows.rush.map(row => polishPrediction(row, score, '冲刺')),
@@ -449,7 +448,7 @@ function previousRecommendationKeys(score, subject, schoolProvince, rushCandidat
         rebalanceScarceHighScoreRows(score, subject, rushRows, stableRows, safeRows);
         const canonicalRows = canonicalizeRows(score, rushRows, stableRows, safeRows,
             rushCandidates, stableCandidates, safeCandidates, keys);
-        if (!schoolProvince || schoolProvince === '全部地区') enforceHenanProvinceMix(canonicalRows, score, subject, keys);
+        if (!schoolProvince || schoolProvince === '全部地区') enforceHenanFirstPageRows(canonicalRows, score, subject, keys);
         [...canonicalRows.rush, ...canonicalRows.stable, ...canonicalRows.safe].forEach(row => keys.add(rowKey(row)));
     }
     recommendNonce = currentNonce;
@@ -815,20 +814,14 @@ function henanLimitsByBucket(score, subject, schoolProvince) {
     if (schoolProvince && schoolProvince !== '全部地区') {
         return [MAX_VISIBLE_ROWS, MAX_VISIBLE_ROWS, MAX_VISIBLE_ROWS];
     }
-    return [1, 1, 1];
-}
-
-function enforceHenanProvinceMix(rows, score, subject, excludedKeys = new Set()) {
-    const targetCount = targetHenanRecommendationCount(rows);
-    fillHenanFirstPageRows(rows, score, subject, targetCount, excludedKeys);
-    trimHenanFirstPageRows(rows, targetCount);
-}
-
-function targetHenanRecommendationCount(rows) {
-    const totalRows = ['rush', 'stable', 'safe']
-        .map(bucket => Array.isArray(rows[bucket]) ? rows[bucket].length : 0)
-        .reduce((total, count) => total + count, 0);
-    return Math.max(0, Math.round(totalRows * HENAN_LOCAL_RECOMMEND_RATIO));
+    const rule = henanFirstPageRule(score);
+    if (rule && rule.min >= 5) return [2, 2, 2];
+    if (rule && rule.min >= 3) return [1, 1, 1];
+    const totalLimit = clamp(totalHenanLimit(score, subject), 1, 4);
+    if (totalLimit === 1) return rotateHenanLimits(score, subject, [1, 0, 0], [0, 1, 0], [0, 0, 1]);
+    if (totalLimit === 2) return rotateHenanLimits(score, subject, [1, 1, 0], [1, 0, 1], [0, 1, 1]);
+    if (totalLimit === 3) return [1, 1, 1];
+    return rotateHenanLimits(score, subject, [2, 1, 1], [1, 2, 1], [1, 1, 2]);
 }
 
 function henanFirstPageRule(score) {
@@ -1150,7 +1143,7 @@ function isRenderableMajorText(value) {
 }
 
 function undergraduateLine(subject) {
-    return subject === '物理' ? PHYSICS_UNDERGRADUATE_LINE_2026 : HISTORY_UNDERGRADUATE_LINE_2026;
+    return subject === '物理' ? PHYSICS_UNDERGRADUATE_LINE_2025 : HISTORY_UNDERGRADUATE_LINE_2025;
 }
 
 function scoreOf(row) {

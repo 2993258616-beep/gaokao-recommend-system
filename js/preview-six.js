@@ -2,7 +2,7 @@ let subjectType = '历史';
 let selectedElectives = ['化学', '生物'];
 let predictionLines = [];
 
-const PREDICTION_ASSET_VERSION = '2026062310';
+const PREDICTION_ASSET_VERSION = '2026062403';
 const MAX_VISIBLE_ROWS = 6;
 const QUERY_LIMIT = 36;
 const PLAN_COUNT = 6;
@@ -78,7 +78,7 @@ const PROVINCE_ADMISSION_RULES = {
     山东: { mode: 'majorSchool', label: '专业（类）+院校', line: { 历史: 441, 物理: 441 }, special: { 历史: 521, 物理: 521 }, junior: { 历史: 150, 物理: 150 } },
     湖北: { mode: 'group', label: '院校专业组', line: { 历史: 442, 物理: 426 }, special: { 历史: 536, 物理: 516 }, junior: { 历史: 200, 物理: 200 } },
     湖南: { mode: 'group', label: '院校专业组', line: { 历史: 446, 物理: 405 }, special: { 历史: 503, 物理: 476 }, junior: { 历史: 200, 物理: 200 } },
-    广东: { mode: 'group', label: '院校专业组', line: { 历史: 464, 物理: 436 }, special: { 历史: 557, 物理: 534 }, junior: { 历史: 215, 物理: 200 } },
+    广东: { mode: 'group', label: '院校专业组', line: { 历史: 440, 物理: 425 }, special: { 历史: 546, 物理: 539 }, junior: { 历史: 200, 物理: 200 }, lineYear: 2026, specialYear: 2026, juniorYear: 2026 },
     广西: { mode: 'group', label: '院校专业组', line: { 历史: 402, 物理: 370 }, special: { 历史: 518, 物理: 495 }, junior: { 历史: 200, 物理: 200 } },
     海南: { mode: 'group', label: '院校专业组', line: { 历史: 480, 物理: 480 }, special: { 历史: 568, 物理: 568 }, junior: { 历史: 255, 物理: 255 } },
     重庆: { mode: 'majorSchool', label: '专业（类）+院校', line: { 历史: 438, 物理: 425 }, special: { 历史: 515, 物理: 498 }, junior: { 历史: 180, 物理: 180 } },
@@ -679,11 +679,8 @@ function provinceJuniorLine(subject, province) {
 }
 
 function toProvinceScore(baseScore, subject, candidateProvince) {
-    if (!candidateProvince || candidateProvince === BASE_PROVINCE) return clamp(Math.round(Number(baseScore || 0)), 100, 750);
-    const baseLine = provinceLine(subject, BASE_PROVINCE);
-    const selectedLine = provinceLine(subject, candidateProvince);
-    const translated = selectedLine + ((Number(baseScore || 0) - baseLine) / PROVINCE_SCORE_SCALE);
-    return clamp(Math.round(translated), 100, 750);
+    const score = Math.round(Number(baseScore || 0));
+    return clamp(Number.isFinite(score) ? score : 0, 100, 750);
 }
 
 function ruleModeForRow(row) {
@@ -1045,13 +1042,13 @@ function queryCandidates(score, subject, schoolProvince, bucket, allowUndergradu
 
 function toProvinceCandidate(row, candidateProvince = BASE_PROVINCE) {
     const copy = { ...row };
-    const delta = candidateProvince === BASE_PROVINCE ? 0 : nationalAdmissionAdjustment(copy, candidateProvince);
+    const delta = 0;
     copy.nationalDelta = delta;
     copy.candidateProvince = candidateProvince;
     copy.admissionMode = ruleModeForRow(copy);
     copy.nationalEstimateLabel = candidateProvince === BASE_PROVINCE
         ? (Number(copy.sourcePlanYear) === 2026 ? '招生之友2026计划' : '按2025投档线')
-        : `${displayProvinceName(candidateProvince)}线差+本省规则估算`;
+        : `${displayProvinceName(candidateProvince)}按${CONTROL_LINE_SOURCE.year}年阳光高考分数线参考`;
     copy.filingScore = toProvinceScore(Number(copy.filingScore || copy.predictScore || 0) + delta, copy.subjectType, candidateProvince);
     copy.predictScore = toProvinceScore(Number(copy.predictScore || copy.filingScore || 0) + delta, copy.subjectType, candidateProvince);
     copy.predictLow = toProvinceScore(Number(copy.predictLow || copy.predictScore - 6) + delta, copy.subjectType, candidateProvince);
@@ -1466,8 +1463,10 @@ function polishPrediction(row, score, bucket) {
     let predicted = copy.predictScore + displayBoost(copy);
     predicted = clampToBucket(predicted, score, bucket);
     const band = copy.schoolLevel === '本科' ? 6 : 8;
-    if (copy.schoolLevel === '本科') predicted = Math.max(predicted, undergraduateLine(copy.subjectType, copy.candidateProvince) + 2);
-    if (copy.schoolLevel === '专科') predicted = Math.min(predicted, undergraduateLine(copy.subjectType, copy.candidateProvince) + 18);
+    const line = undergraduateLine(copy.subjectType, copy.candidateProvince);
+    if (copy.schoolLevel === '本科' && Number(score || 0) >= line) predicted = Math.max(predicted, line + 2);
+    if (copy.schoolLevel === '专科') predicted = Math.min(predicted, line + 18);
+    predicted = clampToBucket(predicted, score, bucket);
     copy.predictScore = predicted;
     copy.predictLow = clamp(predicted - band, 0, 750);
     copy.predictHigh = clamp(predicted + band, 0, 750);
