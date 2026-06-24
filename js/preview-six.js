@@ -2,7 +2,7 @@ let subjectType = '历史';
 let selectedElectives = ['化学', '生物'];
 let predictionLines = [];
 
-const PREDICTION_ASSET_VERSION = '2026062403';
+const PREDICTION_ASSET_VERSION = '2026062404';
 const MAX_VISIBLE_ROWS = 6;
 const QUERY_LIMIT = 36;
 const PLAN_COUNT = 6;
@@ -63,7 +63,7 @@ const PROVINCE_ADMISSION_RULES = {
     河南: { mode: 'group', label: '院校专业组', line: { 历史: 471, 物理: 427 }, special: { 历史: 552, 物理: 535 }, junior: { 历史: 185, 物理: 185 } },
     北京: { mode: 'group', label: '院校专业组', line: { 历史: 430, 物理: 430 }, special: { 历史: 519, 物理: 519 }, junior: { 历史: 120, 物理: 120 } },
     天津: { mode: 'group', label: '院校专业组', line: { 历史: 458, 物理: 458 }, special: { 历史: 547, 物理: 547 }, junior: { 历史: 160, 物理: 160 }, lineYear: 2026, specialYear: 2026, juniorYear: 2025 },
-    河北: { mode: 'majorSchool', label: '专业（类）+院校', line: { 历史: 477, 物理: 459 }, special: { 历史: 527, 物理: 499 }, junior: { 历史: 200, 物理: 200 } },
+    河北: { mode: 'majorSchool', label: '专业（类）+院校', line: { 历史: 485, 物理: 443 }, special: { 历史: 542, 物理: 510 }, junior: { 历史: 200, 物理: 200 }, lineYear: 2026, specialYear: 2026, juniorYear: 2026 },
     山西: { mode: 'group', label: '院校专业组', line: { 历史: 443, 物理: 419 }, special: { 历史: 534, 物理: 507 }, junior: { 历史: 180, 物理: 200 } },
     内蒙古: { mode: 'group', label: '院校专业组', line: { 历史: 418, 物理: 375 }, special: { 历史: 523, 物理: 487 }, junior: { 历史: 160, 物理: 160 } },
     辽宁: { mode: 'majorSchool', label: '专业（类）+院校', line: { 历史: 437, 物理: 367 }, special: { 历史: 522, 物理: 515 }, junior: { 历史: 150, 物理: 150 } },
