@@ -2,7 +2,7 @@ let subjectType = '历史';
 let selectedElectives = ['化学', '生物'];
 let predictionLines = [];
 
-const PREDICTION_ASSET_VERSION = '2026062408';
+const PREDICTION_ASSET_VERSION = '2026062409';
 const MAX_VISIBLE_ROWS = 6;
 const QUERY_LIMIT = 36;
 const PLAN_COUNT = 6;
