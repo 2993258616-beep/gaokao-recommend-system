@@ -126,7 +126,7 @@ def build_estimated_row(template_rows, source_row, next_id):
     if not scores:
         return None
     predicted = int(round(median(scores) + estimate_adjustment(source_row)))
-    predicted = max(471, min(750, predicted))
+    predicted = max(459, min(750, predicted))
     row = dict(template)
     row.update({
         "id": next_id,
