@@ -4,8 +4,8 @@ let predictionLines = [];
 const MAX_VISIBLE_ROWS = 3;
 const QUERY_LIMIT = 18;
 const PLAN_COUNT = 6;
-const HISTORY_UNDERGRADUATE_LINE_2025 = 471;
-const PHYSICS_UNDERGRADUATE_LINE_2025 = 427;
+const HISTORY_UNDERGRADUATE_LINE_2026 = 459;
+const PHYSICS_UNDERGRADUATE_LINE_2026 = 419;
 const NEAR_UNDERGRADUATE_MARGIN = 20;
 const STATIC_LOGIN_USER = 'admin';
 const STATIC_LOGIN_HASH = '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9';
@@ -1150,7 +1150,7 @@ function isRenderableMajorText(value) {
 }
 
 function undergraduateLine(subject) {
-    return subject === '物理' ? PHYSICS_UNDERGRADUATE_LINE_2025 : HISTORY_UNDERGRADUATE_LINE_2025;
+    return subject === '物理' ? PHYSICS_UNDERGRADUATE_LINE_2026 : HISTORY_UNDERGRADUATE_LINE_2026;
 }
 
 function scoreOf(row) {

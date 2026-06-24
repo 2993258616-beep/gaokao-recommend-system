@@ -188,7 +188,7 @@ public class PredictionRepository {
     }
 
     private int undergraduateLine(String subjectType) {
-        return "物理".equals(subjectType) ? 427 : 471;
+        return "物理".equals(subjectType) ? 419 : 459;
     }
 
     private PredictionLine map(java.sql.ResultSet rs) throws java.sql.SQLException {

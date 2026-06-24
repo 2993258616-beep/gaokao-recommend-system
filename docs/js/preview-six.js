@@ -6,8 +6,8 @@ const PREDICTION_ASSET_VERSION = '2026062404';
 const MAX_VISIBLE_ROWS = 6;
 const QUERY_LIMIT = 36;
 const PLAN_COUNT = 6;
-const HISTORY_UNDERGRADUATE_LINE_2025 = 471;
-const PHYSICS_UNDERGRADUATE_LINE_2025 = 427;
+const HISTORY_UNDERGRADUATE_LINE_2026 = 459;
+const PHYSICS_UNDERGRADUATE_LINE_2026 = 419;
 const NEAR_UNDERGRADUATE_MARGIN = 20;
 const STATIC_LOGIN_USER = 'admin';
 const STATIC_LOGIN_HASH = '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9';
@@ -59,7 +59,7 @@ const SCHOOL_PROVINCES = [
     '西藏', '陕西', '甘肃', '青海', '宁夏', '新疆'
 ];
 const PROVINCE_ADMISSION_RULES = {
-    河南: { mode: 'group', label: '院校专业组', line: { 历史: 471, 物理: 427 }, special: { 历史: 552, 物理: 535 }, junior: { 历史: 185, 物理: 185 } },
+    河南: { mode: 'group', label: '院校专业组', line: { 历史: 459, 物理: 419 }, special: { 历史: 534, 物理: 513 }, junior: { 历史: 179, 物理: 179 }, lineYear: 2026, specialYear: 2026, juniorYear: 2026 },
     北京: { mode: 'group', label: '院校专业组', line: { 历史: 430, 物理: 430 }, special: { 历史: 519, 物理: 519 }, junior: { 历史: 120, 物理: 120 } },
     天津: { mode: 'group', label: '院校专业组', line: { 历史: 476, 物理: 476 }, special: { 历史: 562, 物理: 562 }, junior: { 历史: 160, 物理: 160 } },
     河北: { mode: 'majorSchool', label: '专业（类）+院校', line: { 历史: 485, 物理: 443 }, special: { 历史: 542, 物理: 510 }, junior: { 历史: 200, 物理: 200 }, lineYear: 2026, specialYear: 2026, juniorYear: 2026 },

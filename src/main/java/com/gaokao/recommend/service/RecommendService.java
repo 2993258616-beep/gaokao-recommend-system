@@ -16,8 +16,8 @@ import java.util.Map;
 
 @Service
 public class RecommendService {
-    private static final int HISTORY_UNDERGRADUATE_LINE_2025 = 471;
-    private static final int PHYSICS_UNDERGRADUATE_LINE_2025 = 427;
+    private static final int HISTORY_UNDERGRADUATE_LINE_2026 = 459;
+    private static final int PHYSICS_UNDERGRADUATE_LINE_2026 = 419;
     private static final int VISIBLE_LIMIT = 3;
     private static final int QUERY_LIMIT = 18;
     private static final int PLAN_COUNT = 6;
@@ -217,7 +217,7 @@ public class RecommendService {
     }
 
     private int undergraduateLine(String subjectType) {
-        return "物理".equals(subjectType) ? PHYSICS_UNDERGRADUATE_LINE_2025 : HISTORY_UNDERGRADUATE_LINE_2025;
+        return "物理".equals(subjectType) ? PHYSICS_UNDERGRADUATE_LINE_2026 : HISTORY_UNDERGRADUATE_LINE_2026;
     }
 
     private boolean shouldUseQualityJuniorCollege(Integer score, String subjectType, String bucket) {
