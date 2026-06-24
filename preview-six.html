@@ -6,8 +6,8 @@
     <title>全国高考志愿推荐系统</title>
     <link rel="stylesheet" href="./css/preview-six.css?v=2026062310">
 </head>
-<body>
-<section id="previewLoginView" class="static-login" hidden>
+<body class="locked">
+<section id="loginView" class="static-login">
     <form id="loginForm" class="login-card" autocomplete="off">
         <div class="login-title">全国高考志愿推荐系统</div>
         <div class="login-subtitle">2026 预测版 · 登录后进入推荐页面</div>
@@ -20,7 +20,7 @@
     </form>
 </section>
 
-<div id="appView" class="app-shell">
+<div id="appView" class="app-shell" hidden>
     <header class="hero">
         <div class="top-actions">
             <button id="staticLogout" class="logout-btn" type="button">安全退出</button>
@@ -75,6 +75,6 @@
 </div>
 
 <script src="./js/bcrypt.min.js"></script>
-<script src="./js/preview-six.js?v=2026062404"></script>
+<script src="./js/preview-six.js?v=2026062405"></script>
 </body>
 </html>

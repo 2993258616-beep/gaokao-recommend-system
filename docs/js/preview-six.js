@@ -444,8 +444,15 @@ function mergeStaticUsers(baseUsers, extraUsers) {
     baseUsers.concat(extraUsers).forEach(user => {
         const username = String(user.username || '').trim();
         const passwordHash = String(user.passwordHash || user.hash || '').trim();
-        if (username && passwordHash) {
-            merged.set(username.toLowerCase(), { username, passwordHash });
+        const bcryptHash = String(user.bcryptHash || '').trim();
+        if (username && (passwordHash || bcryptHash)) {
+            const key = username.toLowerCase();
+            const existing = merged.get(key) || { username };
+            merged.set(key, {
+                username,
+                passwordHash: passwordHash || existing.passwordHash || '',
+                bcryptHash: bcryptHash || existing.bcryptHash || ''
+            });
         }
     });
     return Array.from(merged.values());
