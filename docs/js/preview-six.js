@@ -814,9 +814,11 @@ function renderRecommend() {
 }
 
 function renderSummaryText(score, candidateProvince) {
+    const summary = $('summaryText');
+    if (!summary) return;
     const meta = provinceRuleMeta(subjectType, candidateProvince);
     const rankText = henanRankSummary(score, subjectType, candidateProvince);
-    $('summaryText').innerText = `按${displayProvinceName(candidateProvince)}当前录取规则估算：${subjectSummaryLabel(subjectType, candidateProvince)}，预估 ${score} 分${rankText}，${meta}，匹配全国院校，第 ${recommendNonce + 1} 批。`;
+    summary.innerText = `按${displayProvinceName(candidateProvince)}当前录取规则估算：${subjectSummaryLabel(subjectType, candidateProvince)}，预估 ${score} 分${rankText}，${meta}，匹配全国院校，第 ${recommendNonce + 1} 批。`;
 }
 
 function hasRecommendationRows(rows) {
