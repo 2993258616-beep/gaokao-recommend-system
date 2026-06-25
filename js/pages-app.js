@@ -1,6 +1,9 @@
 let subjectType = '历史';
 let predictionLines = [];
+let henanRankSegments = {};
 
+const PREDICTION_ASSET_VERSION = '2026062409';
+const HENAN_SEGMENT_ASSET_VERSION = '2026062501';
 const MAX_VISIBLE_ROWS = 3;
 const QUERY_LIMIT = 18;
 const PLAN_COUNT = 6;
@@ -339,9 +342,13 @@ async function sha256(value) {
 async function init() {
     renderProvinceOptions();
     try {
-        const response = await fetch('./assets/prediction-lines.json?v=2026062409', { cache: 'no-store' });
-        if (!response.ok) throw new Error('数据文件读取失败');
-        predictionLines = await response.json();
+        const [predictionResponse, segmentResponse] = await Promise.all([
+            fetch(`./assets/prediction-lines.json?v=${PREDICTION_ASSET_VERSION}`, { cache: 'no-store' }),
+            fetch(`./assets/henan-2026-segments.json?v=${HENAN_SEGMENT_ASSET_VERSION}`, { cache: 'no-store' }).catch(() => null)
+        ]);
+        if (!predictionResponse.ok) throw new Error('数据文件读取失败');
+        predictionLines = await predictionResponse.json();
+        henanRankSegments = segmentResponse && segmentResponse.ok ? await segmentResponse.json() : {};
         resetPlanAndRender();
     } catch (err) {
         $('resultArea').innerHTML = `<div class="empty">加载失败：${escapeHtml(err.message)}</div>`;
@@ -392,8 +399,29 @@ function renderRecommend() {
         + section('safe', '保', '保底推荐', '适合保底填报的院校', rows.safe);
 }
 
+function lookupHenanRank(score, subject) {
+    const rows = henanRankSegments.subjects && henanRankSegments.subjects[subject];
+    if (!Array.isArray(rows) || !rows.length) return null;
+    const targetScore = Math.round(Number(score || 0));
+    let rank = null;
+    for (const row of rows) {
+        if (Number(row.score) >= targetScore) {
+            rank = Number(row.rank);
+        } else {
+            break;
+        }
+    }
+    return Number.isFinite(rank) && rank > 0 ? rank : null;
+}
+
+function henanRankSummary(score, subject) {
+    const rank = lookupHenanRank(score, subject);
+    return rank ? `，2026河南一分一段约第 ${rank.toLocaleString('zh-CN')} 名` : '';
+}
+
 function renderSummaryText(score, schoolProvince) {
-    $('summaryText').innerText = `第 ${recommendNonce + 1} 批`;
+    const rankText = henanRankSummary(score, subjectType);
+    $('summaryText').innerText = `按历史录取数据参考：河南${subjectType}类，预估 ${score} 分${rankText}，筛选条件为学校地区：${schoolProvince}，第 ${recommendNonce + 1} 批。`;
 }
 
 function hasRecommendationRows(rows) {
@@ -435,7 +463,7 @@ function recommend(score, subject, schoolProvince) {
     rebalanceScarceHighScoreRows(score, subject, rushRows, stableRows, safeRows);
     const canonicalRows = canonicalizeRows(score, rushRows, stableRows, safeRows,
         rushCandidates, stableCandidates, safeCandidates, previousBatchKeys);
-    if (allRegions) enforceHenanProvinceMix(canonicalRows, score, subject, previousBatchKeys);
+    if (allRegions) enforceHenanFirstPageRows(canonicalRows, score, subject, previousBatchKeys);
 
     return {
         rush: canonicalRows.rush.map(row => polishPrediction(row, score, '冲刺')),
@@ -456,7 +484,7 @@ function previousRecommendationKeys(score, subject, schoolProvince, rushCandidat
         rebalanceScarceHighScoreRows(score, subject, rushRows, stableRows, safeRows);
         const canonicalRows = canonicalizeRows(score, rushRows, stableRows, safeRows,
             rushCandidates, stableCandidates, safeCandidates, keys);
-        if (!schoolProvince || schoolProvince === '全部地区') enforceHenanProvinceMix(canonicalRows, score, subject, keys);
+        if (!schoolProvince || schoolProvince === '全部地区') enforceHenanFirstPageRows(canonicalRows, score, subject, keys);
         [...canonicalRows.rush, ...canonicalRows.stable, ...canonicalRows.safe].forEach(row => keys.add(rowKey(row)));
     }
     recommendNonce = currentNonce;
@@ -832,22 +860,9 @@ function henanLimitsByBucket(score, subject, schoolProvince) {
         [basePlan[2], basePlan[0], basePlan[1]]);
 }
 
-function enforceHenanProvinceMix(rows, score, subject, excludedKeys = new Set()) {
-    const targetCount = targetHenanRecommendationCount(rows);
-    fillHenanFirstPageRows(rows, score, subject, targetCount, excludedKeys);
-}
-
-function targetHenanRecommendationCount(rows) {
-    const totalRows = ['rush', 'stable', 'safe']
-        .map(bucket => Array.isArray(rows[bucket]) ? rows[bucket].length : 0)
-        .reduce((total, count) => total + count, 0);
-    return Math.max(0, Math.ceil(totalRows * HENAN_LOCAL_RECOMMEND_RATIO));
-}
-
 function henanFirstPageRule(score) {
-    if (score >= 160 && score <= 300) return { min: 5, max: 6 };
-    if (score > 300 && score <= 600) return { min: 3, max: 4 };
-    return null;
+    const target = Math.max(1, Math.ceil(MAX_VISIBLE_ROWS * 3 * HENAN_LOCAL_RECOMMEND_RATIO));
+    return { min: target, max: target };
 }
 
 function totalHenanLimit(score, subject) {
@@ -878,10 +893,8 @@ function enforceHenanFirstPageRows(rows, score, subject, excludedKeys = new Set(
     const targetCount = targetHenanFirstPageCount(score, subject, rule);
     ensureHenanBucketCoverage(rows, score, subject, excludedKeys);
     fillHenanFirstPageRows(rows, score, subject, targetCount, excludedKeys);
-    trimHenanFirstPageRows(rows, rule.max);
     ensureHenanBucketCoverage(rows, score, subject, excludedKeys);
     fillHenanFirstPageRows(rows, score, subject, targetCount, excludedKeys);
-    trimHenanFirstPageRows(rows, rule.max);
 }
 
 function targetHenanFirstPageCount(score, subject, rule) {

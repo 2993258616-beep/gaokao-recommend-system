@@ -1,6 +1,9 @@
 let subjectType = '历史';
 let predictionLines = [];
+let henanRankSegments = {};
 
+const PREDICTION_ASSET_VERSION = '2026062409';
+const HENAN_SEGMENT_ASSET_VERSION = '2026062501';
 const MAX_VISIBLE_ROWS = 3;
 const QUERY_LIMIT = 18;
 const PLAN_COUNT = 6;
@@ -339,9 +342,13 @@ async function sha256(value) {
 async function init() {
     renderProvinceOptions();
     try {
-        const response = await fetch('./assets/prediction-lines.json?v=2026062409', { cache: 'no-store' });
-        if (!response.ok) throw new Error('数据文件读取失败');
-        predictionLines = await response.json();
+        const [predictionResponse, segmentResponse] = await Promise.all([
+            fetch(`./assets/prediction-lines.json?v=${PREDICTION_ASSET_VERSION}`, { cache: 'no-store' }),
+            fetch(`./assets/henan-2026-segments.json?v=${HENAN_SEGMENT_ASSET_VERSION}`, { cache: 'no-store' }).catch(() => null)
+        ]);
+        if (!predictionResponse.ok) throw new Error('数据文件读取失败');
+        predictionLines = await predictionResponse.json();
+        henanRankSegments = segmentResponse && segmentResponse.ok ? await segmentResponse.json() : {};
         resetPlanAndRender();
     } catch (err) {
         $('resultArea').innerHTML = `<div class="empty">加载失败：${escapeHtml(err.message)}</div>`;
@@ -392,8 +399,29 @@ function renderRecommend() {
         + section('safe', '保', '保底推荐', '适合保底填报的院校', rows.safe);
 }
 
+function lookupHenanRank(score, subject) {
+    const rows = henanRankSegments.subjects && henanRankSegments.subjects[subject];
+    if (!Array.isArray(rows) || !rows.length) return null;
+    const targetScore = Math.round(Number(score || 0));
+    let rank = null;
+    for (const row of rows) {
+        if (Number(row.score) >= targetScore) {
+            rank = Number(row.rank);
+        } else {
+            break;
+        }
+    }
+    return Number.isFinite(rank) && rank > 0 ? rank : null;
+}
+
+function henanRankSummary(score, subject) {
+    const rank = lookupHenanRank(score, subject);
+    return rank ? `，2026河南一分一段约第 ${rank.toLocaleString('zh-CN')} 名` : '';
+}
+
 function renderSummaryText(score, schoolProvince) {
-    $('summaryText').innerText = `按历史录取数据参考：河南${subjectType}类，预估 ${score} 分，筛选条件为学校地区：${schoolProvince}，第 ${recommendNonce + 1} 批。`;
+    const rankText = henanRankSummary(score, subjectType);
+    $('summaryText').innerText = `按历史录取数据参考：河南${subjectType}类，预估 ${score} 分${rankText}，筛选条件为学校地区：${schoolProvince}，第 ${recommendNonce + 1} 批。`;
 }
 
 function hasRecommendationRows(rows) {

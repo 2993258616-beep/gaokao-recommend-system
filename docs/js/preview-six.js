@@ -1,8 +1,10 @@
 let subjectType = '历史';
 let selectedElectives = ['政治', '地理'];
 let predictionLines = [];
+let henanRankSegments = {};
 
 const PREDICTION_ASSET_VERSION = '2026062409';
+const HENAN_SEGMENT_ASSET_VERSION = '2026062501';
 const MAX_VISIBLE_ROWS = 6;
 const QUERY_LIMIT = 36;
 const PLAN_COUNT = 6;
@@ -62,18 +64,18 @@ const SCHOOL_PROVINCES = [
 const PROVINCE_ADMISSION_RULES = {
     河南: { mode: 'group', label: '院校专业组', line: { 历史: 459, 物理: 419 }, special: { 历史: 534, 物理: 513 }, junior: { 历史: 179, 物理: 179 }, lineYear: 2026, specialYear: 2026, juniorYear: 2026 },
     北京: { mode: 'group', label: '院校专业组', line: { 历史: 430, 物理: 430 }, special: { 历史: 519, 物理: 519 }, junior: { 历史: 120, 物理: 120 } },
-    天津: { mode: 'group', label: '院校专业组', line: { 历史: 476, 物理: 476 }, special: { 历史: 562, 物理: 562 }, junior: { 历史: 160, 物理: 160 } },
+    天津: { mode: 'group', label: '院校专业组', line: { 历史: 458, 物理: 458 }, special: { 历史: 547, 物理: 547 }, junior: { 历史: 160, 物理: 160 }, lineYear: 2026, specialYear: 2026, juniorYear: 2025 },
     河北: { mode: 'majorSchool', label: '专业（类）+院校', line: { 历史: 485, 物理: 443 }, special: { 历史: 542, 物理: 510 }, junior: { 历史: 200, 物理: 200 }, lineYear: 2026, specialYear: 2026, juniorYear: 2026 },
     山西: { mode: 'group', label: '院校专业组', line: { 历史: 443, 物理: 419 }, special: { 历史: 534, 物理: 507 }, junior: { 历史: 180, 物理: 200 } },
-    内蒙古: { mode: 'group', label: '院校专业组', line: { 历史: 418, 物理: 375 }, special: { 历史: 523, 物理: 487 }, junior: { 历史: 160, 物理: 160 } },
+    内蒙古: { mode: 'group', label: '院校专业组', line: { 历史: 403, 物理: 363 }, special: { 历史: 512, 物理: 488 }, junior: { 历史: 160, 物理: 160 }, lineYear: 2026, specialYear: 2026, juniorYear: 2026 },
     辽宁: { mode: 'majorSchool', label: '专业（类）+院校', line: { 历史: 437, 物理: 367 }, special: { 历史: 522, 物理: 515 }, junior: { 历史: 150, 物理: 150 } },
     吉林: { mode: 'group', label: '院校专业组', line: { 历史: 384, 物理: 340 }, special: { 历史: 493, 物理: 479 }, junior: { 历史: 160, 物理: 160 } },
     黑龙江: { mode: 'group', label: '院校专业组', line: { 历史: 405, 物理: 360 }, special: { 历史: 480, 物理: 472 }, junior: { 历史: 160, 物理: 160 } },
-    上海: { mode: 'group', label: '院校专业组', line: { 历史: 402, 物理: 402 }, special: { 历史: 505, 物理: 505 }, junior: { 历史: 100, 物理: 100 } },
-    江苏: { mode: 'group', label: '院校专业组', line: { 历史: 482, 物理: 463 }, special: { 历史: 537, 物理: 519 }, junior: { 历史: 220, 物理: 220 } },
+    上海: { mode: 'group', label: '院校专业组', line: { 历史: 403, 物理: 403 }, special: { 历史: 504, 物理: 504 }, junior: { 历史: 100, 物理: 100 }, lineYear: 2026, specialYear: 2026, juniorYear: 2025 },
+    江苏: { mode: 'group', label: '院校专业组', line: { 历史: 484, 物理: 456 }, special: { 历史: 532, 物理: 513 }, junior: { 历史: 220, 物理: 220 }, lineYear: 2026, specialYear: 2026, juniorYear: 2025 },
     浙江: { mode: 'majorSchool', label: '专业（类）+院校', line: { 历史: 490, 物理: 490 }, special: { 历史: 592, 物理: 592 }, junior: { 历史: 268, 物理: 268 } },
     安徽: { mode: 'group', label: '院校专业组', line: { 历史: 477, 物理: 461 }, special: { 历史: 515, 物理: 514 }, junior: { 历史: 200, 物理: 200 } },
-    福建: { mode: 'group', juniorMode: 'majorSchool', label: '院校专业组', line: { 历史: 450, 物理: 441 }, special: { 历史: 531, 物理: 520 }, junior: { 历史: 235, 物理: 235 } },
+    福建: { mode: 'group', juniorMode: 'majorSchool', label: '院校专业组', line: { 历史: 458, 物理: 446 }, special: { 历史: 533, 物理: 528 }, junior: { 历史: 235, 物理: 235 }, lineYear: 2026, specialYear: 2026, juniorYear: 2026 },
     江西: { mode: 'group', label: '院校专业组', line: { 历史: 486, 物理: 429 }, special: { 历史: 539, 物理: 505 }, junior: { 历史: 290, 物理: 240 } },
     山东: { mode: 'majorSchool', label: '专业（类）+院校', line: { 历史: 441, 物理: 441 }, special: { 历史: 521, 物理: 521 }, junior: { 历史: 150, 物理: 150 } },
     湖北: { mode: 'group', label: '院校专业组', line: { 历史: 442, 物理: 426 }, special: { 历史: 536, 物理: 516 }, junior: { 历史: 200, 物理: 200 } },
@@ -81,7 +83,7 @@ const PROVINCE_ADMISSION_RULES = {
     广东: { mode: 'group', label: '院校专业组', line: { 历史: 440, 物理: 425 }, special: { 历史: 546, 物理: 539 }, junior: { 历史: 200, 物理: 200 }, lineYear: 2026, specialYear: 2026, juniorYear: 2026 },
     广西: { mode: 'group', label: '院校专业组', line: { 历史: 402, 物理: 370 }, special: { 历史: 518, 物理: 495 }, junior: { 历史: 200, 物理: 200 } },
     海南: { mode: 'group', label: '院校专业组', line: { 历史: 480, 物理: 480 }, special: { 历史: 568, 物理: 568 }, junior: { 历史: 255, 物理: 255 } },
-    重庆: { mode: 'majorSchool', label: '专业（类）+院校', line: { 历史: 438, 物理: 425 }, special: { 历史: 515, 物理: 498 }, junior: { 历史: 180, 物理: 180 } },
+    重庆: { mode: 'majorSchool', label: '专业（类）+院校', line: { 历史: 415, 物理: 406 }, special: { 历史: 510, 物理: 496 }, junior: { 历史: 180, 物理: 180 }, lineYear: 2026, specialYear: 2026, juniorYear: 2026 },
     四川: { mode: 'group', label: '院校专业组', line: { 历史: 467, 物理: 438 }, special: { 历史: 533, 物理: 518 }, junior: { 历史: 150, 物理: 150 } },
     贵州: { mode: 'majorSchool', label: '专业（类）+院校', line: { 历史: 458, 物理: 387 }, special: { 历史: 517, 物理: 483 }, junior: { 历史: 180, 物理: 180 } },
     云南: { mode: 'group', label: '院校专业组', line: { 历史: 465, 物理: 430 }, special: { 历史: 555, 物理: 495 }, junior: { 历史: 180, 物理: 180 } },
@@ -90,7 +92,7 @@ const PROVINCE_ADMISSION_RULES = {
     甘肃: { mode: 'group', label: '院校专业组', line: { 历史: 412, 物理: 374 }, special: { 历史: 500, 物理: 475 }, junior: { 历史: 160, 物理: 180 } },
     青海: { mode: 'majorSchool', label: '专业（类）+院校', line: { 历史: 405, 物理: 350 }, special: { 历史: 450, 物理: 420 }, junior: { 历史: 150, 物理: 150 } },
     宁夏: { mode: 'group', label: '院校专业组', line: { 历史: 404, 物理: 372 }, special: { 历史: 482, 物理: 441 }, junior: { 历史: 150, 物理: 150 } },
-    新疆: { mode: 'traditional', label: '传统文理院校志愿', line: { 历史: 330, 物理: 280 }, special: { 历史: 451, 物理: 421 }, junior: { 历史: 140, 物理: 140 } }
+    新疆: { mode: 'traditional', label: '传统文理院校志愿', line: { 历史: 315, 物理: 304 }, special: { 历史: 451, 物理: 468 }, junior: { 历史: 140, 物理: 140 }, lineYear: 2026, specialYear: 2026, juniorYear: 2026 }
 };
 const SCHOOL_PROVINCE_COMPETITION_DELTA = {
     北京: 14,
@@ -154,7 +156,7 @@ const LOCAL_PROVINCE_ADVANTAGE = {
 const ELECTIVE_DEFAULTS_BY_SUBJECT = {
     历史: ['政治', '地理'],
     物理: ['化学', '生物'],
-    综合: ['物理', '化学'],
+    综合: ['物理', '化学', '生物'],
     文科: ['政治', '地理'],
     理科: ['化学', '生物']
 };
@@ -470,9 +472,13 @@ async function init() {
         validateProvinceRuleCoverage();
         renderProvinceOptions();
         syncSubjectControlsForProvince();
-        const response = await fetch(`./assets/prediction-lines.json?v=${PREDICTION_ASSET_VERSION}`, { cache: 'no-store' });
-        if (!response.ok) throw new Error('数据文件读取失败');
-        predictionLines = await response.json();
+        const [predictionResponse, segmentResponse] = await Promise.all([
+            fetch(`./assets/prediction-lines.json?v=${PREDICTION_ASSET_VERSION}`, { cache: 'no-store' }),
+            fetch(`./assets/henan-2026-segments.json?v=${HENAN_SEGMENT_ASSET_VERSION}`, { cache: 'no-store' }).catch(() => null)
+        ]);
+        if (!predictionResponse.ok) throw new Error('数据文件读取失败');
+        predictionLines = await predictionResponse.json();
+        henanRankSegments = segmentResponse && segmentResponse.ok ? await segmentResponse.json() : {};
         resetPlanAndRender();
     } catch (err) {
         $('resultArea').innerHTML = `<div class="empty">加载失败：${escapeHtml(err.message)}</div>`;
@@ -570,29 +576,36 @@ function updateSubjectControls() {
 
 function normalizeSelectedElectives() {
     const options = currentElectiveOptions();
+    const limit = electiveLimitForCurrentProvince();
     const unique = [];
     for (const item of selectedElectives) {
         if (options.includes(item) && !unique.includes(item)) unique.push(item);
     }
-    const defaults = ELECTIVE_DEFAULTS_BY_SUBJECT[subjectType] || ELECTIVE_OPTIONS.slice(0, 2);
+    const defaults = ELECTIVE_DEFAULTS_BY_SUBJECT[subjectType] || ELECTIVE_OPTIONS.slice(0, limit);
     for (const item of defaults) {
-        if (unique.length >= 2) break;
+        if (unique.length >= limit) break;
         if (options.includes(item) && !unique.includes(item)) unique.push(item);
     }
-    selectedElectives = unique.slice(0, 2);
+    selectedElectives = unique.slice(0, limit);
 }
 
 function toggleElective(value) {
     if (!currentElectiveOptions().includes(value)) return;
     normalizeSelectedElectives();
+    const limit = electiveLimitForCurrentProvince();
     if (selectedElectives.includes(value)) {
         if (selectedElectives.length > 1) selectedElectives = selectedElectives.filter(item => item !== value);
     } else {
-        selectedElectives = selectedElectives.length >= 2
+        selectedElectives = selectedElectives.length >= limit
             ? selectedElectives.slice(1).concat(value)
             : selectedElectives.concat(value);
     }
     normalizeSelectedElectives();
+}
+
+function electiveLimitForCurrentProvince() {
+    const province = $('schoolProvince') ? $('schoolProvince').value || BASE_PROVINCE : BASE_PROVINCE;
+    return provinceExamMode(province) === 'new33' ? 3 : 2;
 }
 
 function currentElectiveOptions() {
@@ -689,6 +702,28 @@ function provinceJuniorLine(subject, province) {
     return scoreLineSubject(subject) === '物理' ? item.物理 : item.历史;
 }
 
+function lookupHenanRank(score, subject) {
+    if (!henanRankSegments || henanRankSegments.province !== BASE_PROVINCE) return null;
+    const rows = henanRankSegments.subjects && henanRankSegments.subjects[scoreLineSubject(subject)];
+    if (!Array.isArray(rows) || !rows.length) return null;
+    const targetScore = Math.round(Number(score || 0));
+    let rank = null;
+    for (const row of rows) {
+        if (Number(row.score) >= targetScore) {
+            rank = Number(row.rank);
+        } else {
+            break;
+        }
+    }
+    return Number.isFinite(rank) && rank > 0 ? rank : null;
+}
+
+function henanRankSummary(score, subject, province) {
+    if (province !== BASE_PROVINCE) return '';
+    const rank = lookupHenanRank(score, subject);
+    return rank ? `，2026河南一分一段约第 ${rank.toLocaleString('zh-CN')} 名` : '';
+}
+
 function toProvinceScore(baseScore, subject, candidateProvince) {
     const score = Math.round(Number(baseScore || 0));
     return clamp(Number.isFinite(score) ? score : 0, 100, 750);
@@ -780,7 +815,8 @@ function renderRecommend() {
 
 function renderSummaryText(score, candidateProvince) {
     const meta = provinceRuleMeta(subjectType, candidateProvince);
-    $('summaryText').innerText = `按${displayProvinceName(candidateProvince)}当前录取规则估算：${subjectSummaryLabel(subjectType, candidateProvince)}，预估 ${score} 分，${meta}，匹配全国院校，第 ${recommendNonce + 1} 批。`;
+    const rankText = henanRankSummary(score, subjectType, candidateProvince);
+    $('summaryText').innerText = `按${displayProvinceName(candidateProvince)}当前录取规则估算：${subjectSummaryLabel(subjectType, candidateProvince)}，预估 ${score} 分${rankText}，${meta}，匹配全国院校，第 ${recommendNonce + 1} 批。`;
 }
 
 function hasRecommendationRows(rows) {
